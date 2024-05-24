@@ -1,3 +1,3 @@
 pub mod actor;
 pub mod dispatch;
-mod util;
+pub mod util;
