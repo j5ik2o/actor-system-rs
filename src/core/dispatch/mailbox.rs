@@ -2,8 +2,9 @@ use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 pub mod mailbox_status;
@@ -13,6 +14,9 @@ pub mod system_message;
 #[derive(Clone, Debug)]
 struct MailboxInner {
   current_status: Arc<AtomicU32>,
+  throughput: usize,
+  is_throughput_deadline_time_defined: Arc<AtomicBool>,
+  throughput_deadline_time: Duration,
   actor: Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>>,
 }
 
@@ -29,6 +33,9 @@ impl Mailbox {
     Self {
       inner: Arc::new(Mutex::new(MailboxInner {
         current_status: Arc::new(AtomicU32::new(MailboxStatus::Open as u32)),
+        throughput: 1,
+        is_throughput_deadline_time_defined: Arc::new(AtomicBool::new(false)),
+        throughput_deadline_time: Duration::from_millis(100),
         actor: Arc::new(None),
       })),
       sender,
@@ -59,10 +66,54 @@ impl Mailbox {
     MailboxStatus::try_from(status).unwrap()
   }
 
-    pub(crate) async fn set_status(&self, status: MailboxStatus) {
-        let mut inner = self.inner.lock().await;
-        inner.current_status.store(status as u32, Ordering::SeqCst);
-    }
+  pub(crate) async fn is_throughput_deadline_time_defined(&self) -> bool {
+    let inner = self.inner.lock().await;
+    inner.is_throughput_deadline_time_defined.load(Ordering::SeqCst)
+  }
+
+  pub(crate) async fn should_process_message(&self) -> bool {
+    let inner = self.inner.lock().await;
+    let current_status = inner.current_status.load(Ordering::SeqCst);
+    (current_status & MailboxStatus::ShouldNotProcessMask as u32) == 0
+  }
+
+  pub async fn is_suspend(&self) -> bool {
+    let inner = self.inner.lock().await;
+    let current_status = inner.current_status.load(Ordering::SeqCst);
+    (current_status & MailboxStatus::SuspendMask as u32) != 0
+  }
+
+  pub(crate) async fn is_closed(&self) -> bool {
+    let inner = self.inner.lock().await;
+    let current_status = inner.current_status.load(Ordering::SeqCst);
+    current_status == MailboxStatus::Closed as u32
+  }
+
+  pub(crate) async fn is_scheduled(&self) -> bool {
+    let inner = self.inner.lock().await;
+    let current_status = inner.current_status.load(Ordering::SeqCst);
+    (current_status & MailboxStatus::Scheduled as u32) != 0
+  }
+
+  // pub(crate) async fn can_be_scheduled_for_panic(&self, has_message_hint: bool, has_system_message_hint: bool) -> bool {
+  //   let inner = self.inner.lock().await;
+  //   let current_status = inner.current_status.load(Ordering::SeqCst);
+  //   let current_status_type = MailboxStatus::try_from(current_status).unwrap();
+  //   let result = match current_status_type {
+  //     cs if cs == MailboxStatus::Open || cs == MailboxStatus::Scheduled => {
+  //       has_message_hint || has_system_message_hint || inner.message_receiver.non_empty().await
+  //     }
+  //     cs if cs == MailboxStatus::Closed => false,
+  //     _ => has_system_message_hint || inner.system_message_receiver.non_empty().await,
+  //   };
+  //   result
+  // }
+
+  pub(crate) async fn suspend_count(&self) -> u32 {
+    let inner = self.inner.lock().await;
+    let current_status = inner.current_status.load(Ordering::SeqCst);
+    current_status / MailboxStatus::SuspendUnit as u32
+  }
 
   pub async fn set_actor(&mut self, actor: Arc<Mutex<Box<dyn AnyActor>>>) {
     let mut inner = self.inner.lock().await;
