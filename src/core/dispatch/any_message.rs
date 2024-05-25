@@ -3,6 +3,7 @@ use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use crate::core::util::element::Element;
 
 #[derive(Debug)]
 pub enum AnyMessageError {
@@ -16,6 +17,8 @@ pub struct AnyMessage {
 
 unsafe impl Send for AnyMessage {}
 unsafe impl Sync for AnyMessage {}
+
+impl Element for AnyMessage {}
 
 impl AnyMessage {
   pub fn new<T>(msg: T) -> Self

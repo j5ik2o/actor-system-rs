@@ -30,7 +30,7 @@ impl ActorSystem {
   pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, actor: A) -> ActorRef<A::M> {
     let actor_ref = ActorRef::new(path.clone());
     let mut actors = self.actors.lock().await;
-    let mut mailbox = Mailbox::new();
+    let mut mailbox = Mailbox::new().await;
     let mut system_mailbox = SystemMailbox::new();
     let actor_cell = ActorCell::new(
       actor,

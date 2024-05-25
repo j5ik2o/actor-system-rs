@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-pub trait Element: Debug + Clone + Send + Sync {}
+pub trait Element: Debug  + Clone  + Send + Sync {}
 
 impl Element for i8 {}
 

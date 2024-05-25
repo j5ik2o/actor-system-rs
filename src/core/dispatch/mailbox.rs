@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use crate::core::util::queue::{create_queue, Queue, QueueSize, QueueType};
 
 pub mod mailbox_status;
 pub mod system_mailbox;
@@ -25,10 +26,12 @@ pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
   sender: UnboundedSender<AnyMessage>,
   receiver: Arc<Mutex<UnboundedReceiver<AnyMessage>>>,
+  queue: Arc<Mutex<Queue<AnyMessage>>>
 }
 
 impl Mailbox {
-  pub fn new() -> Self {
+  pub async fn new() -> Self {
+    let queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     let (sender, receiver) = unbounded();
     Self {
       inner: Arc::new(Mutex::new(MailboxInner {
@@ -40,7 +43,12 @@ impl Mailbox {
       })),
       sender,
       receiver: Arc::new(Mutex::new(receiver)),
+      queue: Arc::new(Mutex::new(queue))
     }
+  }
+
+  pub(crate) async fn queue(&self) -> Arc<Mutex<Queue<AnyMessage>>> {
+    self.queue.clone()
   }
 
   pub(crate) async fn sender(&self) -> &UnboundedSender<AnyMessage> {
