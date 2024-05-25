@@ -8,9 +8,7 @@ use std::task::{Context, Poll};
 
 use crate::core::util::element::Element;
 use crate::core::util::queue::blocking_queue::BlockingQueue;
-use crate::core::util::queue::{
-  BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueSize, QueueStreamIter,
-};
+use crate::core::util::queue::{BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
 
@@ -68,6 +66,10 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueVec<E> {
     self.capacity.clone()
   }
 
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteBehavior<E> for QueueVec<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     if self.non_full().await {
       let mut mg = self.elements.lock().await;
@@ -77,7 +79,10 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueVec<E> {
       Err(QueueError::OfferError(element).into())
     }
   }
+}
 
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadBehavior<E> for QueueVec<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut mg = self.elements.lock().await;
     Ok(mg.pop_front())

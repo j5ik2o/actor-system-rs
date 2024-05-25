@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::core::util::element::Element;
 use crate::core::util::queue::queue_vec::QueueVec;
-use crate::core::util::queue::{QueueBehavior, QueueError, QueueSize, QueueStreamIter};
+use crate::core::util::queue::{QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use tokio::sync::mpsc::error::{SendError, TryRecvError};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
@@ -78,6 +78,14 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
     inner_guard.capacity.clone()
   }
 
+
+
+
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteBehavior<E> for QueueMPSC<E> {
+
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     match self.tx.send(element).await {
       Ok(_) => {
@@ -88,6 +96,11 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
       Err(SendError(err)) => Err(QueueError::OfferError(err).into()),
     }
   }
+
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadBehavior<E> for QueueMPSC<E> {
 
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut inner_guard = self.inner.lock().await;
@@ -100,4 +113,5 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
       Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError.into()),
     }
   }
+
 }

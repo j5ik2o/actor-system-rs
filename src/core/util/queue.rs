@@ -16,6 +16,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use async_trait::async_trait;
 use thiserror::Error;
 
 /// An error that occurs when a queue operation fails.<br/>
@@ -188,6 +189,11 @@ pub trait QueueBehavior<E: Element>: Send + Sized + Sync {
   /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
   async fn capacity(&self) -> QueueSize;
 
+
+}
+
+#[async_trait::async_trait]
+pub trait QueueWriteBehavior<E: Element>: QueueBehavior<E> {
   /// The specified element will be inserted into this queue,
   /// if the queue can be executed immediately without violating the capacity limit.<br/>
   /// 容量制限に違反せずにすぐ実行できる場合は、指定された要素をこのキューに挿入します。
@@ -217,7 +223,10 @@ pub trait QueueBehavior<E: Element>: Send + Sized + Sync {
     }
     Ok(())
   }
+}
 
+#[async_trait::async_trait]
+pub trait QueueReadBehavior<E: Element>: QueueBehavior<E> {
   /// Retrieves and deletes the head of the queue. Returns None if the queue is empty.<br/>
   /// キューの先頭を取得および削除します。キューが空の場合は None を返します。
   ///
@@ -260,6 +269,25 @@ pub trait HasContainsBehavior<E: Element>: QueueBehavior<E> {
 /// ブロッキングキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
 pub trait BlockingQueueBehavior<E: Element>: QueueBehavior<E> + Send {
+  /// Returns the number of elements that can be inserted into this queue without blocking.<br/>
+  /// ブロックせずにこのキューに挿入できる要素数を返します。
+  ///
+  /// # Return Value / 戻り値
+  /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
+  /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
+  async fn remaining_capacity(&self) -> QueueSize;
+
+  /// Returns whether the operation of this queue has been interrupted.<br/>
+  /// このキューの操作が中断されたかどうかを返します。
+  ///
+  /// # Return Value / 戻り値
+  /// - `true` - If the operation is interrupted. / 操作が中断された場合。
+  /// - `false` - If the operation is not interrupted. / 操作が中断されていない場合。
+  async fn is_interrupted(&self) -> bool;
+}
+
+#[async_trait::async_trait]
+pub trait BlockingQueueWriteBehavior<E: Element>: BlockingQueueBehavior<E> {
   /// Inserts the specified element into this queue. If necessary, waits until space is available.<br/>
   /// 指定された要素をこのキューに挿入します。必要に応じて、空きが生じるまで待機します。
   ///
@@ -272,6 +300,15 @@ pub trait BlockingQueueBehavior<E: Element>: QueueBehavior<E> + Send {
   /// - `Err(QueueError::InterruptedError)` - If the operation is interrupted. / 操作が中断された場合。
   async fn put(&mut self, element: E) -> Result<(), QueueError<E>>;
 
+  /// Interrupts the operation of this queue.<br/>
+  /// このキューの操作を中断します。
+  async fn interrupt(&mut self);
+
+}
+
+#[async_trait::async_trait]
+pub trait BlockingQueueReadBehavior<E: Element>: BlockingQueueBehavior<E> {
+
   /// Retrieve the head of this queue and delete it. If necessary, wait until an element becomes available.<br/>
   /// このキューの先頭を取得して削除します。必要に応じて、要素が利用可能になるまで待機します。
   ///
@@ -281,25 +318,6 @@ pub trait BlockingQueueBehavior<E: Element>: QueueBehavior<E> + Send {
   /// - `Err(QueueError::InterruptedError)` - If the operation is interrupted. / 操作が中断された場合。
   async fn take(&mut self) -> Result<Option<E>, QueueError<E>>;
 
-  /// Returns the number of elements that can be inserted into this queue without blocking.<br/>
-  /// ブロックせずにこのキューに挿入できる要素数を返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
-  /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
-  async fn remaining_capacity(&self) -> QueueSize;
-
-  /// Interrupts the operation of this queue.<br/>
-  /// このキューの操作を中断します。
-  async fn interrupt(&mut self);
-
-  /// Returns whether the operation of this queue has been interrupted.<br/>
-  /// このキューの操作が中断されたかどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the operation is interrupted. / 操作が中断された場合。
-  /// - `false` - If the operation is not interrupted. / 操作が中断されていない場合。
-  async fn is_interrupted(&self) -> bool;
 }
 
 /// An enumeration type that represents the type of queue.<br/>
@@ -402,6 +420,10 @@ impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
     }
   }
 
+}
+
+#[async_trait::async_trait]
+impl<T: Element + 'static> QueueWriteBehavior<T> for Queue<T> {
   async fn offer(&mut self, element: T) -> Result<(), QueueError<T>> {
     match self {
       Queue::VecDequeue(inner) => inner.offer(element).await,
@@ -417,7 +439,10 @@ impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
       Queue::MPSC(inner) => inner.offer_all(elements).await,
     }
   }
+}
 
+#[async_trait::async_trait]
+impl<T: Element + 'static> QueueReadBehavior<T> for Queue<T> {
   async fn poll(&mut self) -> Result<Option<T>, QueueError<T>> {
     match self {
       Queue::VecDequeue(inner) => inner.poll().await,
@@ -465,7 +490,7 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueStreamIter<E, Q> {
   }
 }
 
-impl<E: Element + Unpin + 'static, Q: QueueBehavior<E> + Unpin> Stream for QueueStreamIter<E, Q> {
+impl<E: Element + Unpin + 'static, Q: QueueReadBehavior<E> + Unpin> Stream for QueueStreamIter<E, Q> {
   type Item = E;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

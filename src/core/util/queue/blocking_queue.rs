@@ -6,9 +6,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{
-  BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueSize, QueueStreamIter,
-};
+use crate::core::util::queue::{BlockingQueueBehavior, BlockingQueueReadBehavior, BlockingQueueWriteBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use futures::Stream;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
@@ -65,6 +63,10 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueBehavior<E> for BlockingQue
     queue_vec_mutex_guard.capacity().await
   }
 
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueWriteBehavior<E>> QueueWriteBehavior<E> for BlockingQueue<E, Q> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     let (queue_vec_mutex, _, not_empty) = &*self.underlying;
     let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
@@ -80,7 +82,10 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueBehavior<E> for BlockingQue
     not_empty.notify_one();
     result
   }
+}
 
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueReadBehavior<E>> QueueReadBehavior<E> for BlockingQueue<E, Q> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let (queue_vec_mutex, not_full, _) = &*self.underlying;
     let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
@@ -115,6 +120,31 @@ impl<E: Element + 'static, Q: QueueBehavior<E> + HasContainsBehavior<E>> HasCont
 
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueueBehavior<E> for BlockingQueue<E, Q> {
+
+
+
+
+  async fn remaining_capacity(&self) -> QueueSize {
+    let (queue_vec_mutex, _, _) = &*self.underlying;
+    let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let capacity = queue_vec_mutex_guard.capacity().await;
+    let len = queue_vec_mutex_guard.len().await;
+    match (capacity.clone(), len.clone()) {
+      (QueueSize::Limited(capacity), QueueSize::Limited(len)) => QueueSize::Limited(capacity - len),
+      (QueueSize::Limitless, _) => QueueSize::Limitless,
+      (_, _) => QueueSize::Limited(0),
+    }
+  }
+
+
+
+  async fn is_interrupted(&self) -> bool {
+    self.is_interrupted.load(Ordering::Relaxed)
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueWriteBehavior<E>> BlockingQueueWriteBehavior<E> for BlockingQueue<E, Q> {
   async fn put(&mut self, element: E) -> Result<(), QueueError<E>> {
     let (queue_vec_mutex, not_full, not_empty) = &*self.underlying;
     let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
@@ -132,6 +162,18 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueueBehavior<E> for Blo
     result
   }
 
+  async fn interrupt(&mut self) {
+    log::debug!("interrupt: start...");
+    self.is_interrupted.store(true, Ordering::Relaxed);
+    let (_, not_full, not_empty) = &*self.underlying;
+    not_empty.notify_all();
+    not_full.notify_all();
+    log::debug!("interrupt: end...");
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueReadBehavior<E>> BlockingQueueReadBehavior<E> for BlockingQueue<E, Q> {
   async fn take(&mut self) -> Result<Option<E>, QueueError<E>> {
     let (queue_vec_mutex, not_full, not_empty) = &*self.underlying;
     let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
@@ -148,31 +190,6 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueueBehavior<E> for Blo
     not_full.notify_one();
     result
   }
-
-  async fn remaining_capacity(&self) -> QueueSize {
-    let (queue_vec_mutex, _, _) = &*self.underlying;
-    let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
-    let capacity = queue_vec_mutex_guard.capacity().await;
-    let len = queue_vec_mutex_guard.len().await;
-    match (capacity.clone(), len.clone()) {
-      (QueueSize::Limited(capacity), QueueSize::Limited(len)) => QueueSize::Limited(capacity - len),
-      (QueueSize::Limitless, _) => QueueSize::Limitless,
-      (_, _) => QueueSize::Limited(0),
-    }
-  }
-
-  async fn interrupt(&mut self) {
-    log::debug!("interrupt: start...");
-    self.is_interrupted.store(true, Ordering::Relaxed);
-    let (_, not_full, not_empty) = &*self.underlying;
-    not_empty.notify_all();
-    not_full.notify_all();
-    log::debug!("interrupt: end...");
-  }
-
-  async fn is_interrupted(&self) -> bool {
-    self.is_interrupted.load(Ordering::Relaxed)
-  }
 }
 
 pub struct BlockingQueueIter<E: Element + 'static, Q: QueueBehavior<E>> {
@@ -180,7 +197,7 @@ pub struct BlockingQueueIter<E: Element + 'static, Q: QueueBehavior<E>> {
   p: PhantomData<E>,
 }
 
-impl<E: Element + Unpin + 'static, Q: QueueBehavior<E>> Stream for BlockingQueueIter<E, Q> {
+impl<E: Element + Unpin + 'static, Q: QueueReadBehavior<E>> Stream for BlockingQueueIter<E, Q> {
   type Item = E;
 
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

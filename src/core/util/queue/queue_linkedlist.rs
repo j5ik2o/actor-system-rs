@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use crate::core::util::element::Element;
 use crate::core::util::queue::queue_mpsc::QueueMPSC;
-use crate::core::util::queue::{
-  HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueSize, QueueStreamIter,
-};
+use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use tokio::sync::Mutex;
 
 /// A queue implementation backed by a `LinkedList`.<br/>
@@ -65,6 +63,10 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
     self.capacity.clone()
   }
 
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteBehavior<E> for QueueLinkedList<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     if self.non_full().await {
       let mut mg = self.elements.lock().await;
@@ -74,7 +76,10 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
       Err(QueueError::OfferError(element).into())
     }
   }
+}
 
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadBehavior<E> for QueueLinkedList<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut mg = self.elements.lock().await;
     Ok(mg.pop_front())
