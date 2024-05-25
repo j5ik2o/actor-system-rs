@@ -1,12 +1,11 @@
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::core::util::element::Element;
-use crate::core::util::queue::queue_vec::QueueVec;
-use crate::core::util::queue::{QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
-use tokio::sync::mpsc::error::{SendError, TryRecvError};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::error::{SendError, TryRecvError};
 use tokio::sync::Mutex;
+
+use crate::core::util::element::Element;
+use crate::core::util::queue::{QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 
 /// A queue implementation backed by a `MPSC`.<br/>
 /// `QueueMPSC` で実装されたキュー。

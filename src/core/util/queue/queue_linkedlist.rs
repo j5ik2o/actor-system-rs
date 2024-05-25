@@ -1,11 +1,10 @@
 use std::collections::LinkedList;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::core::util::element::Element;
-use crate::core::util::queue::queue_mpsc::QueueMPSC;
-use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use tokio::sync::Mutex;
+
+use crate::core::util::element::Element;
+use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 
 /// A queue implementation backed by a `LinkedList`.<br/>
 /// `LinkedList` で実装されたキュー。

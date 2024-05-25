@@ -1,16 +1,10 @@
-use futures::Stream;
 use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll};
+
+use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::blocking_queue::BlockingQueue;
-use crate::core::util::queue::{BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
-use tokio::sync::Mutex;
-use tokio_condvar::Condvar;
+use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 
 #[derive(Debug, Clone)]
 pub struct QueueVec<E> {

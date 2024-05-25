@@ -1,15 +1,16 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 
-use crate::core::util::element::Element;
-use crate::core::util::queue::{BlockingQueueBehavior, BlockingQueueReadBehavior, BlockingQueueWriteBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 use futures::Stream;
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
+
+use crate::core::util::element::Element;
+use crate::core::util::queue::{BlockingQueueBehavior, BlockingQueueReadBehavior, BlockingQueueWriteBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
 
 #[derive(Clone)]
 pub struct BlockingQueue<E: Element, Q: QueueBehavior<E>> {
