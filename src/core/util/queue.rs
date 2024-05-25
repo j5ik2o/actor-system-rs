@@ -10,13 +10,13 @@ use crate::core::util::queue::blocking_queue::BlockingQueue;
 use crate::core::util::queue::queue_linkedlist::QueueLinkedList;
 use crate::core::util::queue::queue_mpsc::QueueMPSC;
 use crate::core::util::queue::queue_vec::QueueVec;
+use async_trait::async_trait;
 use futures::Stream;
 use std::cmp::Ordering;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use async_trait::async_trait;
 use thiserror::Error;
 
 /// An error that occurs when a queue operation fails.<br/>
@@ -188,8 +188,6 @@ pub trait QueueBehavior<E: Element>: Send + Sized + Sync {
   /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
   /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
   async fn capacity(&self) -> QueueSize;
-
-
 }
 
 #[async_trait::async_trait]
@@ -239,7 +237,7 @@ pub trait QueueReadBehavior<E: Element>: QueueBehavior<E> {
 /// A trait that defines the behavior of a queue that can be peeked.<br/>
 /// Peekができるキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
-pub trait HasPeekBehavior<E: Element>: QueueBehavior<E> {
+pub trait HasPeekBehavior<E: Element>: QueueReadBehavior<E> {
   /// Gets the head of the queue, but does not delete it. Returns None if the queue is empty.<br/>
   /// キューの先頭を取得しますが、削除しません。キューが空の場合は None を返します。
   ///
@@ -252,7 +250,7 @@ pub trait HasPeekBehavior<E: Element>: QueueBehavior<E> {
 /// A trait that defines the behavior of a queue that can be checked for contains.<br/>
 /// Containsができるキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
-pub trait HasContainsBehavior<E: Element>: QueueBehavior<E> {
+pub trait HasContainsBehavior<E: Element>: QueueReadBehavior<E> {
   /// Returns whether the specified element is contained in this queue.<br/>
   /// 指定された要素がこのキューに含まれているかどうかを返します。
   ///
@@ -303,12 +301,10 @@ pub trait BlockingQueueWriteBehavior<E: Element>: BlockingQueueBehavior<E> {
   /// Interrupts the operation of this queue.<br/>
   /// このキューの操作を中断します。
   async fn interrupt(&mut self);
-
 }
 
 #[async_trait::async_trait]
 pub trait BlockingQueueReadBehavior<E: Element>: BlockingQueueBehavior<E> {
-
   /// Retrieve the head of this queue and delete it. If necessary, wait until an element becomes available.<br/>
   /// このキューの先頭を取得して削除します。必要に応じて、要素が利用可能になるまで待機します。
   ///
@@ -317,7 +313,6 @@ pub trait BlockingQueueReadBehavior<E: Element>: BlockingQueueBehavior<E> {
   /// - `Ok(None)` - If the queue is empty. / キューが空の場合。
   /// - `Err(QueueError::InterruptedError)` - If the operation is interrupted. / 操作が中断された場合。
   async fn take(&mut self) -> Result<Option<E>, QueueError<E>>;
-
 }
 
 /// An enumeration type that represents the type of queue.<br/>
@@ -419,7 +414,6 @@ impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
       Queue::MPSC(inner) => inner.capacity().await,
     }
   }
-
 }
 
 #[async_trait::async_trait]

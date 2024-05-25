@@ -5,7 +5,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::core::util::queue::blocking_queue::BlockingQueue;
-use crate::core::util::queue::{create_queue, create_queue_with_elements, BlockingQueueBehavior, HasContainsBehavior, Queue, QueueBehavior, QueueError, QueueSize, QueueType, QueueReadBehavior, BlockingQueueWriteBehavior, QueueWriteBehavior};
+use crate::core::util::queue::{
+  create_queue, create_queue_with_elements, BlockingQueueBehavior, BlockingQueueWriteBehavior, HasContainsBehavior,
+  Queue, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueType, QueueWriteBehavior,
+};
 use futures::StreamExt;
 use serial_test::serial;
 use tokio::sync::Mutex;

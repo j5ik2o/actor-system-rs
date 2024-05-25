@@ -1,8 +1,8 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::Stream;
@@ -10,13 +10,35 @@ use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{BlockingQueueBehavior, BlockingQueueReadBehavior, BlockingQueueWriteBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior};
+use crate::core::util::queue::{
+  BlockingQueueBehavior, BlockingQueueReadBehavior, BlockingQueueWriteBehavior, HasContainsBehavior, HasPeekBehavior,
+  QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior,
+};
 
-#[derive(Clone)]
 pub struct BlockingQueue<E: Element, Q: QueueBehavior<E>> {
   underlying: Arc<(Mutex<Q>, Condvar, Condvar)>,
   p: PhantomData<E>,
   is_interrupted: Arc<AtomicBool>,
+}
+
+impl<E: Element + 'static, Q: QueueBehavior<E>> Clone for BlockingQueue<E, Q> {
+  fn clone(&self) -> Self {
+    Self {
+      underlying: self.underlying.clone(),
+      p: PhantomData::default(),
+      is_interrupted: self.is_interrupted.clone(),
+    }
+  }
+}
+
+#[derive(Clone)]
+pub struct BlockingQueueSender<E: Element, Q: QueueBehavior<E>> {
+  source: Arc<Mutex<BlockingQueue<E, Q>>>,
+}
+
+#[derive(Clone)]
+pub struct BlockingQueueReceiver<E: Element, Q: QueueBehavior<E>> {
+  source: Arc<Mutex<BlockingQueue<E, Q>>>,
 }
 
 impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueue<E, Q> {
@@ -35,6 +57,18 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueue<E, Q> {
     {
       Ok(_) => true,
       Err(_) => false,
+    }
+  }
+
+  pub fn sender(&self) -> BlockingQueueSender<E, Q> {
+    BlockingQueueSender {
+      source: Arc::new(Mutex::new(self.clone())),
+    }
+  }
+
+  pub fn receiver(&self) -> BlockingQueueReceiver<E, Q> {
+    BlockingQueueReceiver {
+      source: Arc::new(Mutex::new(self.clone())),
     }
   }
 
@@ -63,9 +97,95 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueBehavior<E> for BlockingQue
     let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
     queue_vec_mutex_guard.capacity().await
   }
-
 }
 
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueWriteBehavior<E>> QueueBehavior<E> for BlockingQueueSender<E, Q> {
+  async fn len(&self) -> QueueSize {
+    let source_lock = self.source.lock().await;
+    source_lock.len().await
+  }
+
+  async fn capacity(&self) -> QueueSize {
+    let source_lock = self.source.lock().await;
+    source_lock.capacity().await
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueWriteBehavior<E>> QueueWriteBehavior<E> for BlockingQueueSender<E, Q> {
+  async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
+    let source_lock = self.source.lock().await;
+    let (queue_vec_mutex, _, not_empty) = &*source_lock.underlying;
+    let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let result = queue_vec_mutex_guard.offer(element).await;
+    not_empty.notify_one();
+    result
+  }
+
+  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>> {
+    let source_lock = self.source.lock().await;
+    let (queue_vec_mutex, _, not_empty) = &*source_lock.underlying;
+    let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let result = queue_vec_mutex_guard.offer_all(elements).await;
+    not_empty.notify_one();
+    result
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueReadBehavior<E>> QueueBehavior<E> for BlockingQueueReceiver<E, Q> {
+  async fn len(&self) -> QueueSize {
+    let source_lock = self.source.lock().await;
+    source_lock.len().await
+  }
+
+  async fn capacity(&self) -> QueueSize {
+    let source_lock = self.source.lock().await;
+    source_lock.capacity().await
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueReadBehavior<E>> QueueReadBehavior<E> for BlockingQueueReceiver<E, Q> {
+  async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
+    let source_lock = self.source.lock().await;
+    let (queue_vec_mutex, not_full, _) = &*source_lock.underlying;
+    let mut queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let result = queue_vec_mutex_guard.poll().await;
+    not_full.notify_one();
+    result
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueBehavior<E> + HasPeekBehavior<E>> HasPeekBehavior<E>
+  for BlockingQueueReceiver<E, Q>
+{
+  async fn peek(&self) -> Result<Option<E>, QueueError<E>> {
+    let source_lock = self.source.lock().await;
+    let (queue_vec_mutex, not_full, _) = &*source_lock.underlying;
+    let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let result = queue_vec_mutex_guard.peek().await;
+    not_full.notify_one();
+    result
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static, Q: QueueBehavior<E> + HasContainsBehavior<E>> HasContainsBehavior<E>
+  for BlockingQueueReceiver<E, Q>
+{
+  async fn contains(&self, element: &E) -> bool {
+    let source_lock = self.source.lock().await;
+    let (queue_vec_mutex, _, _) = &*source_lock.underlying;
+    let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
+    let result = queue_vec_mutex_guard.contains(element).await;
+    result
+  }
+}
+
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueWriteBehavior<E>> QueueWriteBehavior<E> for BlockingQueue<E, Q> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
@@ -85,6 +205,7 @@ impl<E: Element + 'static, Q: QueueWriteBehavior<E>> QueueWriteBehavior<E> for B
   }
 }
 
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueReadBehavior<E>> QueueReadBehavior<E> for BlockingQueue<E, Q> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
@@ -96,6 +217,7 @@ impl<E: Element + 'static, Q: QueueReadBehavior<E>> QueueReadBehavior<E> for Blo
   }
 }
 
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueBehavior<E> + HasPeekBehavior<E>> HasPeekBehavior<E> for BlockingQueue<E, Q> {
   async fn peek(&self) -> Result<Option<E>, QueueError<E>> {
@@ -107,6 +229,7 @@ impl<E: Element + 'static, Q: QueueBehavior<E> + HasPeekBehavior<E>> HasPeekBeha
   }
 }
 
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueBehavior<E> + HasContainsBehavior<E>> HasContainsBehavior<E>
   for BlockingQueue<E, Q>
@@ -121,10 +244,6 @@ impl<E: Element + 'static, Q: QueueBehavior<E> + HasContainsBehavior<E>> HasCont
 
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueueBehavior<E> for BlockingQueue<E, Q> {
-
-
-
-
   async fn remaining_capacity(&self) -> QueueSize {
     let (queue_vec_mutex, _, _) = &*self.underlying;
     let queue_vec_mutex_guard = queue_vec_mutex.lock().await;
@@ -137,13 +256,12 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> BlockingQueueBehavior<E> for Blo
     }
   }
 
-
-
   async fn is_interrupted(&self) -> bool {
     self.is_interrupted.load(Ordering::Relaxed)
   }
 }
 
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueWriteBehavior<E>> BlockingQueueWriteBehavior<E> for BlockingQueue<E, Q> {
   async fn put(&mut self, element: E) -> Result<(), QueueError<E>> {
@@ -173,6 +291,7 @@ impl<E: Element + 'static, Q: QueueWriteBehavior<E>> BlockingQueueWriteBehavior<
   }
 }
 
+// TODO: DELETE
 #[async_trait::async_trait]
 impl<E: Element + 'static, Q: QueueReadBehavior<E>> BlockingQueueReadBehavior<E> for BlockingQueue<E, Q> {
   async fn take(&mut self) -> Result<Option<E>, QueueError<E>> {
