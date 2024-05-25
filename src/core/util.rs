@@ -1,2 +1,2 @@
-pub mod queue;
 pub mod element;
+pub mod queue;
