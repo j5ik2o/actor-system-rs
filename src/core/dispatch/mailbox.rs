@@ -1,12 +1,12 @@
 use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
+use crate::core::util::queue::{create_queue, Queue, QueueSize, QueueType};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use crate::core::util::queue::{create_queue, Queue, QueueSize, QueueType};
 
 pub mod mailbox_status;
 pub mod system_mailbox;
@@ -26,7 +26,7 @@ pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
   sender: UnboundedSender<AnyMessage>,
   receiver: Arc<Mutex<UnboundedReceiver<AnyMessage>>>,
-  queue: Arc<Mutex<Queue<AnyMessage>>>
+  queue: Arc<Mutex<Queue<AnyMessage>>>,
 }
 
 impl Mailbox {
@@ -43,7 +43,7 @@ impl Mailbox {
       })),
       sender,
       receiver: Arc::new(Mutex::new(receiver)),
-      queue: Arc::new(Mutex::new(queue))
+      queue: Arc::new(Mutex::new(queue)),
     }
   }
 

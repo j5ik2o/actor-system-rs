@@ -16,7 +16,6 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Duration;
 use thiserror::Error;
 
 /// An error that occurs when a queue operation fails.<br/>
@@ -449,25 +448,6 @@ impl<E: Element + PartialEq + 'static> HasContainsBehavior<E> for Queue<E> {
     }
   }
 }
-
-// pub struct QueueIter<'a, E, Q> {
-//     q: &'a mut Q,
-//     p: PhantomData<E>,
-// }
-//
-// impl<'a, E: Element, Q: QueueBehavior<E>> Iterator for QueueIter<'a, E, Q> {
-//     type Item = E;
-//
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.q.poll().await.unwrap()
-//     }
-// }
-//
-// impl<'a, E: Element + 'static, Q: QueueBehavior<E>> ExactSizeIterator for QueueIter<'a, E, Q> {
-//     fn len(&self) -> usize {
-//         self.q.len().to_usize()
-//     }
-// }
 
 pub struct QueueStreamIter<E, Q> {
   q: Q,
