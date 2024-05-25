@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 use crate::core::util::element::Element;
 use crate::core::util::queue::blocking_queue::BlockingQueue;
 use crate::core::util::queue::{
-  BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueSize, QueueStreamIter,
+  BlockingQueueBehavior, HasContainsBehavior, HasPeekBehavior, QueueWriter, QueueReader, QueueError, QueueSize, QueueStreamIter,
 };
 use tokio::sync::Mutex;
 use tokio_condvar::Condvar;
@@ -57,17 +57,7 @@ impl<E: Element + 'static> QueueVec<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: Element + 'static> QueueBehavior<E> for QueueVec<E> {
-  async fn len(&self) -> QueueSize {
-    let mg = self.elements.lock().await;
-    let len = mg.len();
-    QueueSize::Limited(len)
-  }
-
-  async fn capacity(&self) -> QueueSize {
-    self.capacity.clone()
-  }
-
+impl<E: Element + 'static> QueueWriter<E> for QueueVec<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     if self.non_full().await {
       let mut mg = self.elements.lock().await;
@@ -78,6 +68,21 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueVec<E> {
     }
   }
 
+  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>> {
+    if self.non_full().await {
+      let mut mg = self.elements.lock().await;
+      for element in elements {
+        mg.push_back(element);
+      }
+      Ok(())
+    } else {
+      Err(QueueError::<E>::OfferError(elements.into_iter().next().unwrap()).into())
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReader<E> for QueueVec<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut mg = self.elements.lock().await;
     Ok(mg.pop_front())

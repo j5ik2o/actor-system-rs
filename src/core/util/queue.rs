@@ -128,177 +128,43 @@ impl PartialOrd<QueueSize> for QueueSize {
   }
 }
 
-/// A trait that defines the behavior of a queue.<br/>
-/// キューの振る舞いを定義するトレイト。
+/// A trait that defines the behavior of a queue writer.<br/>
+/// キューへの書き込みを定義するトレイト。
 #[async_trait::async_trait]
-pub trait QueueBehavior<E: Element>: Send + Sized + Sync {
-  /// Returns whether this queue is empty.<br/>
-  /// このキューが空かどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the queue is empty. / キューが空の場合。
-  /// - `false` - If the queue is not empty. / キューが空でない場合。
-  async fn is_empty(&self) -> bool {
-    self.len().await == QueueSize::Limited(0)
-  }
-
-  /// Returns whether this queue is non-empty.<br/>
-  /// このキューが空でないかどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the queue is not empty. / キューが空でない場合。
-  /// - `false` - If the queue is empty. / キューが空の場合。
-  async fn non_empty(&self) -> bool {
-    !self.is_empty().await
-  }
-
-  /// Returns whether the queue size has reached its capacity.<br/>
-  /// このキューのサイズが容量まで到達したかどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the queue size has reached its capacity. / キューのサイズが容量まで到達した場合。
-  /// - `false` - If the queue size has not reached its capacity. / キューのサイズが容量まで到達してない場合。
-  async fn is_full(&self) -> bool {
-    self.capacity().await == self.len().await
-  }
-
-  /// Returns whether the queue size has not reached its capacity.<br/>
-  /// このキューのサイズが容量まで到達してないかどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the queue size has not reached its capacity. / キューのサイズが容量まで到達してない場合。
-  /// - `false` - If the queue size has reached its capacity. / キューのサイズが容量まで到達した場合。
-  async fn non_full(&self) -> bool {
-    !self.is_full().await
-  }
-
-  /// Returns the length of this queue.<br/>
-  /// このキューの長さを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
-  /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
-  async fn len(&self) -> QueueSize;
-
-  /// Returns the capacity of this queue.<br/>
-  /// このキューの最大容量を返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
-  /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
-  async fn capacity(&self) -> QueueSize;
-
-  /// The specified element will be inserted into this queue,
-  /// if the queue can be executed immediately without violating the capacity limit.<br/>
-  /// 容量制限に違反せずにすぐ実行できる場合は、指定された要素をこのキューに挿入します。
-  ///
-  /// # Arguments / 引数
-  /// - `element` - The element to be inserted. / 挿入する要素。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(())` - If the element is inserted successfully. / 要素が正常に挿入された場合。
-  /// - `Err(QueueError::OfferError(element))` - If the element cannot be inserted. / 要素を挿入できなかった場合。
+pub trait QueueWriter<E: Element>: Send + Sized + Sync {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>>;
+  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>>;
+}
 
-  /// The specified elements will be inserted into this queue,
-  /// if the queue can be executed immediately without violating the capacity limit.<br/>
-  /// 容量制限に違反せずにすぐ実行できる場合は、指定された複数の要素をこのキューに挿入します。
-  ///
-  /// # Arguments / 引数
-  /// - `elements` - The elements to be inserted. / 挿入する要素。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(())` - If the elements are inserted successfully. / 要素が正常に挿入された場合。
-  /// - `Err(QueueError::OfferError(element))` - If the elements cannot be inserted. / 要素を挿入できなかった場合。
-  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>> {
-    let elements: Vec<E> = elements.into_iter().collect();
-    for e in elements {
-      self.offer(e).await?;
-    }
-    Ok(())
-  }
-
-  /// Retrieves and deletes the head of the queue. Returns None if the queue is empty.<br/>
-  /// キューの先頭を取得および削除します。キューが空の場合は None を返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(Some(element))` - If the element is retrieved successfully. / 要素が正常に取得された場合。
-  /// - `Ok(None)` - If the queue is empty. / キューが空の場合。
+/// A trait that defines the behavior of a queue reader.<br/>
+/// キューからの読み込みを定義するトレイト。
+#[async_trait::async_trait]
+pub trait QueueReader<E: Element>: Send + Sized + Sync {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>>;
 }
 
 /// A trait that defines the behavior of a queue that can be peeked.<br/>
 /// Peekができるキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
-pub trait HasPeekBehavior<E: Element>: QueueBehavior<E> {
-  /// Gets the head of the queue, but does not delete it. Returns None if the queue is empty.<br/>
-  /// キューの先頭を取得しますが、削除しません。キューが空の場合は None を返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(Some(element))` - If the element is retrieved successfully. / 要素が正常に取得された場合。
-  /// - `Ok(None)` - If the queue is empty. / キューが空の場合。
+pub trait HasPeekBehavior<E: Element>: QueueReader<E> {
   async fn peek(&self) -> Result<Option<E>, QueueError<E>>;
 }
 
 /// A trait that defines the behavior of a queue that can be checked for contains.<br/>
 /// Containsができるキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
-pub trait HasContainsBehavior<E: Element>: QueueBehavior<E> {
-  /// Returns whether the specified element is contained in this queue.<br/>
-  /// 指定された要素がこのキューに含まれているかどうかを返します。
-  ///
-  /// # Arguments / 引数
-  /// - `element` - The element to be checked. / チェックする要素。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the element is contained in this queue. / 要素がこのキューに含まれている場合。
-  /// - `false` - If the element is not contained in this queue. / 要素がこのキューに含まれていない場合。
+pub trait HasContainsBehavior<E: Element>: QueueReader<E> {
   async fn contains(&self, element: &E) -> bool;
 }
 
 /// A trait that defines the behavior of a blocking queue.<br/>
 /// ブロッキングキューの振る舞いを定義するトレイト。
 #[async_trait::async_trait]
-pub trait BlockingQueueBehavior<E: Element>: QueueBehavior<E> + Send {
-  /// Inserts the specified element into this queue. If necessary, waits until space is available.<br/>
-  /// 指定された要素をこのキューに挿入します。必要に応じて、空きが生じるまで待機します。
-  ///
-  /// # Arguments / 引数
-  /// - `element` - The element to be inserted. / 挿入する要素。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(())` - If the element is inserted successfully. / 要素が正常に挿入された場合。
-  /// - `Err(QueueError::OfferError(element))` - If the element cannot be inserted. / 要素を挿入できなかった場合。
-  /// - `Err(QueueError::InterruptedError)` - If the operation is interrupted. / 操作が中断された場合。
+pub trait BlockingQueueBehavior<E: Element>: QueueWriter<E> + QueueReader<E> + Send {
   async fn put(&mut self, element: E) -> Result<(), QueueError<E>>;
-
-  /// Retrieve the head of this queue and delete it. If necessary, wait until an element becomes available.<br/>
-  /// このキューの先頭を取得して削除します。必要に応じて、要素が利用可能になるまで待機します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `Ok(Some(element))` - If the element is retrieved successfully. / 要素が正常に取得された場合。
-  /// - `Ok(None)` - If the queue is empty. / キューが空の場合。
-  /// - `Err(QueueError::InterruptedError)` - If the operation is interrupted. / 操作が中断された場合。
   async fn take(&mut self) -> Result<Option<E>, QueueError<E>>;
-
-  /// Returns the number of elements that can be inserted into this queue without blocking.<br/>
-  /// ブロックせずにこのキューに挿入できる要素数を返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `QueueSize::Limitless` - If the queue has no capacity limit. / キューに容量制限がない場合。
-  /// - `QueueSize::Limited(num)` - If the queue has a capacity limit. / キューに容量制限がある場合。
   async fn remaining_capacity(&self) -> QueueSize;
-
-  /// Interrupts the operation of this queue.<br/>
-  /// このキューの操作を中断します。
   async fn interrupt(&mut self);
-
-  /// Returns whether the operation of this queue has been interrupted.<br/>
-  /// このキューの操作が中断されたかどうかを返します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `true` - If the operation is interrupted. / 操作が中断された場合。
-  /// - `false` - If the operation is not interrupted. / 操作が中断されていない場合。
   async fn is_interrupted(&self) -> bool;
 }
 
@@ -384,78 +250,13 @@ impl<T: Element + 'static> Queue<T> {
   }
 }
 
-#[async_trait::async_trait]
-impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
-  async fn len(&self) -> QueueSize {
-    match self {
-      Queue::VecDequeue(inner) => inner.len().await,
-      Queue::LinkedList(inner) => inner.len().await,
-      Queue::MPSC(inner) => inner.len().await,
-    }
-  }
-
-  async fn capacity(&self) -> QueueSize {
-    match self {
-      Queue::VecDequeue(inner) => inner.capacity().await,
-      Queue::LinkedList(inner) => inner.capacity().await,
-      Queue::MPSC(inner) => inner.capacity().await,
-    }
-  }
-
-  async fn offer(&mut self, element: T) -> Result<(), QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.offer(element).await,
-      Queue::LinkedList(inner) => inner.offer(element).await,
-      Queue::MPSC(inner) => inner.offer(element).await,
-    }
-  }
-
-  async fn offer_all(&mut self, elements: impl IntoIterator<Item = T> + Send) -> Result<(), QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.offer_all(elements).await,
-      Queue::LinkedList(inner) => inner.offer_all(elements).await,
-      Queue::MPSC(inner) => inner.offer_all(elements).await,
-    }
-  }
-
-  async fn poll(&mut self) -> Result<Option<T>, QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.poll().await,
-      Queue::LinkedList(inner) => inner.poll().await,
-      Queue::MPSC(inner) => inner.poll().await,
-    }
-  }
-}
-
-#[async_trait::async_trait]
-impl<E: Element + 'static> HasPeekBehavior<E> for Queue<E> {
-  async fn peek(&self) -> Result<Option<E>, QueueError<E>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.peek().await,
-      Queue::LinkedList(inner) => inner.peek().await,
-      Queue::MPSC(_) => panic!("Not supported implementation."),
-    }
-  }
-}
-
-#[async_trait::async_trait]
-impl<E: Element + PartialEq + 'static> HasContainsBehavior<E> for Queue<E> {
-  async fn contains(&self, element: &E) -> bool {
-    match self {
-      Queue::VecDequeue(inner) => inner.contains(element).await,
-      Queue::LinkedList(inner) => inner.contains(element).await,
-      Queue::MPSC(_) => panic!("Not supported implementation."),
-    }
-  }
-}
-
 pub struct QueueStreamIter<E, Q> {
   q: Q,
   current_future: Option<Pin<Box<dyn Future<Output = Result<Option<E>, QueueError<E>>> + Send>>>,
   p: PhantomData<E>,
 }
 
-impl<E: Element + 'static, Q: QueueBehavior<E>> QueueStreamIter<E, Q> {
+impl<E: Element + 'static, Q: QueueReader<E>> QueueStreamIter<E, Q> {
   pub fn new(q: Q) -> Self {
     QueueStreamIter {
       q,
@@ -465,7 +266,7 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueStreamIter<E, Q> {
   }
 }
 
-impl<E: Element + Unpin + 'static, Q: QueueBehavior<E> + Unpin> Stream for QueueStreamIter<E, Q> {
+impl<E: Element + Unpin + 'static, Q: QueueReader<E> + Unpin> Stream for QueueStreamIter<E, Q> {
   type Item = E;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

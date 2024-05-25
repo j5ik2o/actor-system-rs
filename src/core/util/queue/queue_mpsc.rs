@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::core::util::element::Element;
 use crate::core::util::queue::queue_vec::QueueVec;
-use crate::core::util::queue::{QueueBehavior, QueueError, QueueSize, QueueStreamIter};
+use crate::core::util::queue::{QueueWriter, QueueReader, QueueError, QueueSize, QueueStreamIter};
 use tokio::sync::mpsc::error::{SendError, TryRecvError};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
@@ -67,17 +67,7 @@ impl<E: Element + 'static> QueueMPSC<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
-  async fn len(&self) -> QueueSize {
-    let inner_guard = self.inner.lock().await;
-    inner_guard.count.clone()
-  }
-
-  async fn capacity(&self) -> QueueSize {
-    let inner_guard = self.inner.lock().await;
-    inner_guard.capacity.clone()
-  }
-
+impl<E: Element + 'static> QueueWriter<E> for QueueMPSC<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     match self.tx.send(element).await {
       Ok(_) => {
@@ -89,6 +79,21 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
     }
   }
 
+  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>> {
+    if self.non_full().await {
+      let mut mg = self.elements.lock().await;
+      for element in elements {
+        mg.push_back(element);
+      }
+      Ok(())
+    } else {
+      Err(QueueError::<E>::OfferError(elements.into_iter().next().unwrap()).into())
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReader<E> for QueueMPSC<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut inner_guard = self.inner.lock().await;
     match inner_guard.rx.try_recv() {

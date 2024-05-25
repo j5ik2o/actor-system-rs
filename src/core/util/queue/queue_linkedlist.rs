@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::core::util::element::Element;
 use crate::core::util::queue::queue_mpsc::QueueMPSC;
 use crate::core::util::queue::{
-  HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueSize, QueueStreamIter,
+  HasContainsBehavior, HasPeekBehavior, QueueWriter, QueueReader, QueueError, QueueSize, QueueStreamIter,
 };
 use tokio::sync::Mutex;
 
@@ -54,17 +54,7 @@ impl<E: Element + 'static> QueueLinkedList<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
-  async fn len(&self) -> QueueSize {
-    let mg = self.elements.lock().await;
-    let len = mg.len();
-    QueueSize::Limited(len)
-  }
-
-  async fn capacity(&self) -> QueueSize {
-    self.capacity.clone()
-  }
-
+impl<E: Element + 'static> QueueWriter<E> for QueueLinkedList<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
     if self.non_full().await {
       let mut mg = self.elements.lock().await;
@@ -75,6 +65,21 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
     }
   }
 
+  async fn offer_all(&mut self, elements: impl IntoIterator<Item = E> + Send) -> Result<(), QueueError<E>> {
+    if self.non_full().await {
+      let mut mg = self.elements.lock().await;
+      for element in elements {
+        mg.push_back(element);
+      }
+      Ok(())
+    } else {
+      Err(QueueError::<E>::OfferError(elements.into_iter().next().unwrap()).into())
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReader<E> for QueueLinkedList<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut mg = self.elements.lock().await;
     Ok(mg.pop_front())
