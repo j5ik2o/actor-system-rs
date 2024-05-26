@@ -5,9 +5,8 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{
-  QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior,
-};
+use crate::core::util::queue::{QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior, QueueWriteFactoryBehavior};
+use crate::core::util::queue::queue_vec::{QueueVec, QueueVecReceiver, QueueVecSender};
 
 /// A queue implementation backed by a `MPSC`.<br/>
 /// `QueueMPSC` で実装されたキュー。
@@ -72,17 +71,17 @@ impl<E: Element + 'static> QueueMPSC<E> {
     self
   }
 
-  pub fn sender(&self) -> QueueMPSCSender<E> {
-    QueueMPSCSender {
-      source: Arc::new(Mutex::new(self.clone())),
-    }
-  }
-
-  pub fn receiver(&self) -> QueueMPSCReceiver<E> {
-    QueueMPSCReceiver {
-      source: Arc::new(Mutex::new(self.clone())),
-    }
-  }
+  // pub fn sender(&self) -> QueueMPSCSender<E> {
+  //   QueueMPSCSender {
+  //     source: Arc::new(Mutex::new(self.clone())),
+  //   }
+  // }
+  //
+  // pub fn receiver(&self) -> QueueMPSCReceiver<E> {
+  //   QueueMPSCReceiver {
+  //     source: Arc::new(Mutex::new(self.clone())),
+  //   }
+  // }
 
   pub fn iter(self) -> QueueStreamIter<E, QueueMPSC<E>> {
     QueueStreamIter::new(self)
@@ -90,7 +89,30 @@ impl<E: Element + 'static> QueueMPSC<E> {
 }
 
 #[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteFactoryBehavior<E> for QueueMPSC<E> {
+  type Writer = QueueMPSCSender<E>;
+
+  fn writer(&self) -> Self::Writer {
+    QueueMPSCSender {
+      source: Arc::new(Mutex::new(self.clone())),
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadFactoryBehavior<E> for QueueMPSC<E> {
+  type Reader = QueueMPSCReceiver<E>;
+
+  fn reader(&self) -> Self::Reader {
+    QueueMPSCReceiver {
+      source: Arc::new(Mutex::new(self.clone())),
+    }
+  }
+}
+
+#[async_trait::async_trait]
 impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
+
   async fn len(&self) -> QueueSize {
     let inner_guard = self.inner.lock().await;
     inner_guard.count.clone()
@@ -154,7 +176,7 @@ impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueMPSCReceiver<E> {
         Ok(Some(element))
       }
       Err(TryRecvError::Empty) => Ok(None),
-      Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError.into()),
+      Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError),
     }
   }
 }
@@ -185,7 +207,7 @@ impl<E: Element + 'static> QueueReadBehavior<E> for QueueMPSC<E> {
         Ok(Some(element))
       }
       Err(TryRecvError::Empty) => Ok(None),
-      Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError.into()),
+      Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError),
     }
   }
 }

@@ -4,10 +4,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{
-  HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueSize, QueueStreamIter,
-  QueueWriteBehavior,
-};
+use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior, QueueWriteFactoryBehavior};
+use crate::core::util::queue::queue_mpsc::{QueueMPSC, QueueMPSCReceiver};
 
 /// A queue implementation backed by a `LinkedList`.<br/>
 /// `LinkedList` で実装されたキュー。
@@ -58,25 +56,36 @@ impl<E: Element + 'static> QueueLinkedList<E> {
     self
   }
 
-  pub fn sender(&self) -> QueueLinkedListSender<E> {
-    QueueLinkedListSender {
-      source: Arc::new(Mutex::new(self.clone())),
-    }
-  }
-
-  pub fn receiver(&self) -> QueueLinkedListReceiver<E> {
-    QueueLinkedListReceiver {
-      source: Arc::new(Mutex::new(self.clone())),
-    }
-  }
-
   pub fn iter(self) -> QueueStreamIter<E, QueueLinkedList<E>> {
     QueueStreamIter::new(self)
   }
 }
 
 #[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteFactoryBehavior<E> for QueueLinkedList<E> {
+  type Writer = QueueLinkedListSender<E>;
+
+  fn writer(&self) -> Self::Writer {
+    QueueLinkedListSender {
+      source: Arc::new(Mutex::new(self.clone())),
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadFactoryBehavior<E> for QueueLinkedList<E> {
+  type Reader = QueueLinkedListReceiver<E>;
+
+  fn reader(&self) -> Self::Reader {
+    QueueLinkedListReceiver {
+      source: Arc::new(Mutex::new(self.clone())),
+    }
+  }
+}
+
+#[async_trait::async_trait]
 impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedListSender<E> {
+
   async fn len(&self) -> QueueSize {
     let source_lock = self.source.lock().await;
     source_lock.len().await

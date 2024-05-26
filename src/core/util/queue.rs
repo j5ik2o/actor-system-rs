@@ -1,12 +1,9 @@
-mod blocking_queue;
-#[cfg(test)]
-mod blocking_queue_test;
 mod queue_linkedlist;
 mod queue_mpsc;
 pub mod queue_vec;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::blocking_queue::BlockingQueue;
+// use crate::core::util::queue::blocking_queue::BlockingQueue;
 use crate::core::util::queue::queue_linkedlist::QueueLinkedList;
 use crate::core::util::queue::queue_mpsc::QueueMPSC;
 use crate::core::util::queue::queue_vec::QueueVec;
@@ -191,6 +188,12 @@ pub trait QueueBehavior<E: Element>: Send + Sized + Sync {
 }
 
 #[async_trait::async_trait]
+pub trait QueueWriteFactoryBehavior<E: Element>: QueueBehavior<E> {
+  type Writer: QueueWriteBehavior<E>;
+  fn writer(&self) -> Self::Writer;
+}
+
+#[async_trait::async_trait]
 pub trait QueueWriteBehavior<E: Element>: QueueBehavior<E> {
   /// The specified element will be inserted into this queue,
   /// if the queue can be executed immediately without violating the capacity limit.<br/>
@@ -221,6 +224,12 @@ pub trait QueueWriteBehavior<E: Element>: QueueBehavior<E> {
     }
     Ok(())
   }
+}
+
+#[async_trait::async_trait]
+pub trait QueueReadFactoryBehavior<E: Element>: QueueBehavior<E> {
+  type Reader: QueueReadBehavior<E>;
+  fn reader(&self) -> Self::Reader;
 }
 
 #[async_trait::async_trait]
@@ -285,7 +294,7 @@ pub trait BlockingQueueBehavior<E: Element>: QueueBehavior<E> + Send {
 }
 
 #[async_trait::async_trait]
-pub trait BlockingQueueWriteBehavior<E: Element>: BlockingQueueBehavior<E> {
+pub trait BlockingQueueWriteBehavior<E: Element>: BlockingQueueBehavior<E> + QueueWriteBehavior<E> {
   /// Inserts the specified element into this queue. If necessary, waits until space is available.<br/>
   /// 指定された要素をこのキューに挿入します。必要に応じて、空きが生じるまで待機します。
   ///
@@ -387,14 +396,10 @@ impl<T: Element + 'static> Queue<T> {
     }
   }
 
-  /// Converts the queue to a blocking queue.<br/>
-  /// キューをブロッキングキューに変換します。
-  ///
-  /// # Return Value / 戻り値
-  /// - `BlockingQueue<T, Queue<T>>` - A blocking queue. / ブロッキングキュー。
-  pub fn with_blocking(self) -> BlockingQueue<T, Queue<T>> {
-    BlockingQueue::new(self)
-  }
+
+  // pub fn with_blocking(self) -> BlockingQueue<T, Queue<T>> {
+  //   BlockingQueue::new(self)
+  // }
 }
 
 #[async_trait::async_trait]
