@@ -34,7 +34,7 @@ impl ActorSystem {
     let mut system_mailbox = SystemMailbox::new();
     let actor_cell = ActorCell::new(
       actor,
-      mailbox.sender().await.clone(),
+      mailbox.queue_writer().await.clone(),
       system_mailbox.sender.clone(),
       actor_ref.clone(),
       Arc::new(self.clone()),

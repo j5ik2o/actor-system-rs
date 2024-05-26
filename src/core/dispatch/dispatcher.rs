@@ -26,11 +26,10 @@ impl Dispatcher {
   pub async fn run(&self) {
     let mailboxes = self.mailboxes.lock().await.clone();
     for mailbox in mailboxes {
-      let receiver = mailbox.receiver().await.clone();
+      let mut reader = mailbox.queue_reader().await;
       let actor = mailbox.actor().await.clone();
       tokio::spawn(async move {
-        let mut receiver = receiver.lock().await;
-        while let Some(message) = receiver.next().await {
+        while let Ok(Some(message)) = reader.poll().await {
           if let Some(actor) = actor.as_ref() {
             actor.lock().await.receive(message).await;
           }
@@ -42,7 +41,7 @@ impl Dispatcher {
   pub async fn stop(&self) {
     let mailboxes = self.mailboxes.lock().await.clone();
     for mut mailbox in mailboxes {
-      mailbox.sender_mut().await.disconnect();
+      // mailbox.sender_mut().await.disconnect();
     }
   }
 }

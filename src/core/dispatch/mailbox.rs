@@ -27,15 +27,12 @@ struct MailboxInner {
 #[derive(Clone, Debug)]
 pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
-  sender: UnboundedSender<AnyMessage>,
-  receiver: Arc<Mutex<UnboundedReceiver<AnyMessage>>>,
   queue: Arc<Mutex<Queue<AnyMessage>>>,
 }
 
 impl Mailbox {
   pub async fn new() -> Self {
     let queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
-    let (sender, receiver) = unbounded();
     Self {
       inner: Arc::new(Mutex::new(MailboxInner {
         current_status: Arc::new(AtomicU32::new(MailboxStatus::Open as u32)),
@@ -44,8 +41,6 @@ impl Mailbox {
         throughput_deadline_time: Duration::from_millis(100),
         actor: Arc::new(None),
       })),
-      sender,
-      receiver: Arc::new(Mutex::new(receiver)),
       queue: Arc::new(Mutex::new(queue)),
     }
   }
@@ -64,18 +59,6 @@ impl Mailbox {
     let queue = self.queue().await;
     let mut queue_mg = queue.lock().await;
     queue_mg.reader()
-  }
-
-  pub(crate) async fn sender(&self) -> &UnboundedSender<AnyMessage> {
-    &self.sender
-  }
-
-  pub(crate) async fn sender_mut(&mut self) -> &mut UnboundedSender<AnyMessage> {
-    &mut self.sender
-  }
-
-  pub(crate) async fn receiver(&self) -> &Arc<Mutex<UnboundedReceiver<AnyMessage>>> {
-    &self.receiver
   }
 
   pub(crate) async fn actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>> {

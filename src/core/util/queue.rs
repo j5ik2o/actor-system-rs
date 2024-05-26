@@ -353,12 +353,14 @@ pub enum Queue<T: Element> {
   MPSC(QueueMPSC<T>),
 }
 
+#[derive(Debug, Clone)]
 pub enum QueueWriter<T: Element> {
   VecDequeue(QueueVecSender<T>),
   LinkedList(QueueLinkedListSender<T>),
   MPSC(QueueMPSCSender<T>),
 }
 
+#[derive(Debug, Clone)]
 pub enum QueueReader<T: Element> {
   VecDequeue(QueueVecReceiver<T>),
   LinkedList(QueueLinkedListReceiver<T>),

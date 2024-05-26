@@ -5,12 +5,13 @@ use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::Actor;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
+use crate::core::util::queue::QueueWriter;
 use futures::channel::mpsc::UnboundedSender;
 
 #[derive(Debug)]
 pub struct ActorCell<A: Actor> {
   pub(crate) actor: A,
-  pub(crate) mailbox_sender: UnboundedSender<AnyMessage>,
+  pub(crate) mailbox_sender: QueueWriter<AnyMessage>,
   pub(crate) system_mailbox_sender: UnboundedSender<SystemMessage>,
   pub(crate) self_ref: ActorRef<A::M>,
   pub(crate) system: Arc<ActorSystem>,
@@ -19,7 +20,7 @@ pub struct ActorCell<A: Actor> {
 impl<A: Actor> ActorCell<A> {
   pub fn new(
     actor: A,
-    mailbox_sender: UnboundedSender<AnyMessage>,
+    mailbox_sender: QueueWriter<AnyMessage>,
     system_mailbox_sender: UnboundedSender<SystemMessage>,
     self_ref: ActorRef<A::M>,
     system: Arc<ActorSystem>,
