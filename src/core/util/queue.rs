@@ -396,7 +396,6 @@ impl<T: Element + 'static> Queue<T> {
     }
   }
 
-
   // pub fn with_blocking(self) -> BlockingQueue<T, Queue<T>> {
   //   BlockingQueue::new(self)
   // }
@@ -421,66 +420,14 @@ impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
   }
 }
 
-#[async_trait::async_trait]
-impl<T: Element + 'static> QueueWriteBehavior<T> for Queue<T> {
-  async fn offer(&mut self, element: T) -> Result<(), QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.offer(element).await,
-      Queue::LinkedList(inner) => inner.offer(element).await,
-      Queue::MPSC(inner) => inner.offer(element).await,
-    }
-  }
-
-  async fn offer_all(&mut self, elements: impl IntoIterator<Item = T> + Send) -> Result<(), QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.offer_all(elements).await,
-      Queue::LinkedList(inner) => inner.offer_all(elements).await,
-      Queue::MPSC(inner) => inner.offer_all(elements).await,
-    }
-  }
-}
-
-#[async_trait::async_trait]
-impl<T: Element + 'static> QueueReadBehavior<T> for Queue<T> {
-  async fn poll(&mut self) -> Result<Option<T>, QueueError<T>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.poll().await,
-      Queue::LinkedList(inner) => inner.poll().await,
-      Queue::MPSC(inner) => inner.poll().await,
-    }
-  }
-}
-
-#[async_trait::async_trait]
-impl<E: Element + 'static> HasPeekBehavior<E> for Queue<E> {
-  async fn peek(&self) -> Result<Option<E>, QueueError<E>> {
-    match self {
-      Queue::VecDequeue(inner) => inner.peek().await,
-      Queue::LinkedList(inner) => inner.peek().await,
-      Queue::MPSC(_) => panic!("Not supported implementation."),
-    }
-  }
-}
-
-#[async_trait::async_trait]
-impl<E: Element + PartialEq + 'static> HasContainsBehavior<E> for Queue<E> {
-  async fn contains(&self, element: &E) -> bool {
-    match self {
-      Queue::VecDequeue(inner) => inner.contains(element).await,
-      Queue::LinkedList(inner) => inner.contains(element).await,
-      Queue::MPSC(_) => panic!("Not supported implementation."),
-    }
-  }
-}
-
-pub struct QueueStreamIter<E, Q> {
-  q: Q,
+pub struct QueueStreamIter<E, QR> {
+  q: QR,
   current_future: Option<Pin<Box<dyn Future<Output = Result<Option<E>, QueueError<E>>> + Send>>>,
   p: PhantomData<E>,
 }
 
-impl<E: Element + 'static, Q: QueueBehavior<E>> QueueStreamIter<E, Q> {
-  pub fn new(q: Q) -> Self {
+impl<E: Element + 'static, QR: QueueReadBehavior<E>> QueueStreamIter<E, QR> {
+  pub fn new(q: QR) -> Self {
     QueueStreamIter {
       q,
       current_future: None,
@@ -489,7 +436,7 @@ impl<E: Element + 'static, Q: QueueBehavior<E>> QueueStreamIter<E, Q> {
   }
 }
 
-impl<E: Element + Unpin + 'static, Q: QueueReadBehavior<E> + Unpin> Stream for QueueStreamIter<E, Q> {
+impl<E: Element + Unpin + 'static, QR: QueueReadBehavior<E> + Unpin> Stream for QueueStreamIter<E, QR> {
   type Item = E;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

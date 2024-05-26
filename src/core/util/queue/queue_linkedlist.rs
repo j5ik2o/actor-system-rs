@@ -4,8 +4,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{HasContainsBehavior, HasPeekBehavior, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior, QueueWriteFactoryBehavior};
-use crate::core::util::queue::queue_mpsc::{QueueMPSC, QueueMPSCReceiver};
+use crate::core::util::queue::{
+  QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter,
+  QueueWriteBehavior, QueueWriteFactoryBehavior,
+};
 
 /// A queue implementation backed by a `LinkedList`.<br/>
 /// `LinkedList` で実装されたキュー。
@@ -56,8 +58,20 @@ impl<E: Element + 'static> QueueLinkedList<E> {
     self
   }
 
-  pub fn iter(self) -> QueueStreamIter<E, QueueLinkedList<E>> {
-    QueueStreamIter::new(self)
+  pub fn iter(&self) -> QueueStreamIter<E, QueueLinkedListReceiver<E>> {
+    QueueStreamIter::new(self.reader())
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
+  async fn len(&self) -> QueueSize {
+    let mg = self.elements.lock().await;
+    QueueSize::Limited(mg.len())
+  }
+
+  async fn capacity(&self) -> QueueSize {
+    self.capacity.clone()
   }
 }
 
@@ -85,7 +99,6 @@ impl<E: Element + 'static> QueueReadFactoryBehavior<E> for QueueLinkedList<E> {
 
 #[async_trait::async_trait]
 impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedListSender<E> {
-
   async fn len(&self) -> QueueSize {
     let source_lock = self.source.lock().await;
     source_lock.len().await
@@ -130,60 +143,5 @@ impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueLinkedListReceiver<
     let mut source_lock = self.source.lock().await;
     let mut mg = source_lock.elements.lock().await;
     Ok(mg.pop_front())
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedList<E> {
-  async fn len(&self) -> QueueSize {
-    let mg = self.elements.lock().await;
-    let len = mg.len();
-    QueueSize::Limited(len)
-  }
-
-  async fn capacity(&self) -> QueueSize {
-    self.capacity.clone()
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> QueueWriteBehavior<E> for QueueLinkedList<E> {
-  async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
-    if self.non_full().await {
-      let mut mg = self.elements.lock().await;
-      mg.push_back(element);
-      Ok(())
-    } else {
-      Err(QueueError::OfferError(element))
-    }
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> QueueReadBehavior<E> for QueueLinkedList<E> {
-  async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
-    let mut mg = self.elements.lock().await;
-    Ok(mg.pop_front())
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> HasPeekBehavior<E> for QueueLinkedList<E> {
-  async fn peek(&self) -> Result<Option<E>, QueueError<E>> {
-    let mg = self.elements.lock().await;
-    Ok(mg.front().map(|e| e.clone()))
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + PartialEq + 'static> HasContainsBehavior<E> for QueueLinkedList<E> {
-  async fn contains(&self, element: &E) -> bool {
-    let mg = self.elements.lock().await;
-    mg.contains(element)
   }
 }

@@ -5,8 +5,11 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::{QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter, QueueWriteBehavior, QueueWriteFactoryBehavior};
 use crate::core::util::queue::queue_vec::{QueueVec, QueueVecReceiver, QueueVecSender};
+use crate::core::util::queue::{
+  QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter,
+  QueueWriteBehavior, QueueWriteFactoryBehavior,
+};
 
 /// A queue implementation backed by a `MPSC`.<br/>
 /// `QueueMPSC` で実装されたキュー。
@@ -67,24 +70,12 @@ impl<E: Element + 'static> QueueMPSC<E> {
   /// # Arguments / 引数
   /// - `elements` - The elements to be updated. / 更新する要素。
   pub async fn with_elements(mut self, elements: impl IntoIterator<Item = E> + Send) -> Self {
-    self.offer_all(elements).await.unwrap();
+    self.writer().offer_all(elements).await.unwrap();
     self
   }
 
-  // pub fn sender(&self) -> QueueMPSCSender<E> {
-  //   QueueMPSCSender {
-  //     source: Arc::new(Mutex::new(self.clone())),
-  //   }
-  // }
-  //
-  // pub fn receiver(&self) -> QueueMPSCReceiver<E> {
-  //   QueueMPSCReceiver {
-  //     source: Arc::new(Mutex::new(self.clone())),
-  //   }
-  // }
-
-  pub fn iter(self) -> QueueStreamIter<E, QueueMPSC<E>> {
-    QueueStreamIter::new(self)
+  pub fn iter(&self) -> QueueStreamIter<E, QueueMPSCReceiver<E>> {
+    QueueStreamIter::new(self.reader())
   }
 }
 
@@ -112,7 +103,6 @@ impl<E: Element + 'static> QueueReadFactoryBehavior<E> for QueueMPSC<E> {
 
 #[async_trait::async_trait]
 impl<E: Element + 'static> QueueBehavior<E> for QueueMPSC<E> {
-
   async fn len(&self) -> QueueSize {
     let inner_guard = self.inner.lock().await;
     inner_guard.count.clone()
@@ -170,37 +160,6 @@ impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueMPSCReceiver<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
     let mut source_lock = self.source.lock().await;
     let mut inner_guard = source_lock.inner.lock().await;
-    match inner_guard.rx.try_recv() {
-      Ok(element) => {
-        inner_guard.count.decrement();
-        Ok(Some(element))
-      }
-      Err(TryRecvError::Empty) => Ok(None),
-      Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError),
-    }
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> QueueWriteBehavior<E> for QueueMPSC<E> {
-  async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
-    match self.tx.send(element).await {
-      Ok(_) => {
-        let mut inner_guard = self.inner.lock().await;
-        inner_guard.count.increment();
-        Ok(())
-      }
-      Err(SendError(err)) => Err(QueueError::OfferError(err)),
-    }
-  }
-}
-
-// TODO: DELETE
-#[async_trait::async_trait]
-impl<E: Element + 'static> QueueReadBehavior<E> for QueueMPSC<E> {
-  async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
-    let mut inner_guard = self.inner.lock().await;
     match inner_guard.rx.try_recv() {
       Ok(element) => {
         inner_guard.count.decrement();
