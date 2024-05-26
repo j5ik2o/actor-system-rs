@@ -4,9 +4,9 @@ pub mod queue_vec;
 
 use crate::core::util::element::Element;
 // use crate::core::util::queue::blocking_queue::BlockingQueue;
-use crate::core::util::queue::queue_linkedlist::QueueLinkedList;
-use crate::core::util::queue::queue_mpsc::QueueMPSC;
-use crate::core::util::queue::queue_vec::QueueVec;
+use crate::core::util::queue::queue_linkedlist::{QueueLinkedList, QueueLinkedListReceiver, QueueLinkedListSender};
+use crate::core::util::queue::queue_mpsc::{QueueMPSC, QueueMPSCReceiver, QueueMPSCSender};
+use crate::core::util::queue::queue_vec::{QueueVec, QueueVecReceiver, QueueVecSender};
 use async_trait::async_trait;
 use futures::Stream;
 use std::cmp::Ordering;
@@ -351,6 +351,102 @@ pub enum Queue<T: Element> {
   /// A queue implemented with MPSC.<br/>
   /// MPSCで実装されたキュー。
   MPSC(QueueMPSC<T>),
+}
+
+pub enum QueueWriter<T: Element> {
+  VecDequeue(QueueVecSender<T>),
+  LinkedList(QueueLinkedListSender<T>),
+  MPSC(QueueMPSCSender<T>),
+}
+
+pub enum QueueReader<T: Element> {
+  VecDequeue(QueueVecReceiver<T>),
+  LinkedList(QueueLinkedListReceiver<T>),
+  MPSC(QueueMPSCReceiver<T>),
+}
+
+impl<E: Element + 'static> QueueWriteFactoryBehavior<E> for Queue<E> {
+  type Writer = QueueWriter<E>;
+
+  fn writer(&self) -> Self::Writer {
+    match self {
+      Queue::VecDequeue(inner) => QueueWriter::VecDequeue(inner.writer()),
+      Queue::LinkedList(inner) => QueueWriter::LinkedList(inner.writer()),
+      Queue::MPSC(inner) => QueueWriter::MPSC(inner.writer()),
+    }
+  }
+}
+
+impl<E: Element + 'static> QueueReadFactoryBehavior<E> for Queue<E> {
+  type Reader = QueueReader<E>;
+
+  fn reader(&self) -> Self::Reader {
+    match self {
+      Queue::VecDequeue(inner) => QueueReader::VecDequeue(inner.reader()),
+      Queue::LinkedList(inner) => QueueReader::LinkedList(inner.reader()),
+      Queue::MPSC(inner) => QueueReader::MPSC(inner.reader()),
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueBehavior<E> for QueueWriter<E> {
+  async fn len(&self) -> QueueSize {
+    match self {
+      QueueWriter::VecDequeue(inner) => inner.len().await,
+      QueueWriter::LinkedList(inner) => inner.len().await,
+      QueueWriter::MPSC(inner) => inner.len().await,
+    }
+  }
+
+  async fn capacity(&self) -> QueueSize {
+    match self {
+      QueueWriter::VecDequeue(inner) => inner.capacity().await,
+      QueueWriter::LinkedList(inner) => inner.capacity().await,
+      QueueWriter::MPSC(inner) => inner.capacity().await,
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueWriteBehavior<E> for QueueWriter<E> {
+  async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
+    match self {
+      QueueWriter::VecDequeue(inner) => inner.offer(element).await,
+      QueueWriter::LinkedList(inner) => inner.offer(element).await,
+      QueueWriter::MPSC(inner) => inner.offer(element).await,
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueBehavior<E> for QueueReader<E> {
+  async fn len(&self) -> QueueSize {
+    match self {
+      QueueReader::VecDequeue(inner) => inner.len().await,
+      QueueReader::LinkedList(inner) => inner.len().await,
+      QueueReader::MPSC(inner) => inner.len().await,
+    }
+  }
+
+  async fn capacity(&self) -> QueueSize {
+    match self {
+      QueueReader::VecDequeue(inner) => inner.capacity().await,
+      QueueReader::LinkedList(inner) => inner.capacity().await,
+      QueueReader::MPSC(inner) => inner.capacity().await,
+    }
+  }
+}
+
+#[async_trait::async_trait]
+impl<E: Element + 'static> QueueReadBehavior<E> for QueueReader<E> {
+  async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
+    match self {
+      QueueReader::VecDequeue(inner) => inner.poll().await,
+      QueueReader::LinkedList(inner) => inner.poll().await,
+      QueueReader::MPSC(inner) => inner.poll().await,
+    }
+  }
 }
 
 impl<T: Element + 'static> Queue<T> {

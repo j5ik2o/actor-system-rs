@@ -1,7 +1,10 @@
 use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
-use crate::core::util::queue::{create_queue, Queue, QueueSize, QueueType};
+use crate::core::util::queue::{
+  create_queue, Queue, QueueReadFactoryBehavior, QueueReader, QueueSize, QueueType, QueueWriteFactoryBehavior,
+  QueueWriter,
+};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -49,6 +52,18 @@ impl Mailbox {
 
   pub(crate) async fn queue(&self) -> Arc<Mutex<Queue<AnyMessage>>> {
     self.queue.clone()
+  }
+
+  pub(crate) async fn queue_writer(&self) -> QueueWriter<AnyMessage> {
+    let queue = self.queue().await;
+    let mut queue_mg = queue.lock().await;
+    queue_mg.writer()
+  }
+
+  pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
+    let queue = self.queue().await;
+    let mut queue_mg = queue.lock().await;
+    queue_mg.reader()
   }
 
   pub(crate) async fn sender(&self) -> &UnboundedSender<AnyMessage> {
