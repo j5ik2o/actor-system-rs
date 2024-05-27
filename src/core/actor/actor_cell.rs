@@ -58,9 +58,26 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       SystemMessage::Terminate => {
         log::debug!("Terminate: {}", self.path());
         let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
+        self.mailbox.become_closed().await;
         self.actor.around_post_stop(ctx).await;
       }
     }
+  }
+
+  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Create).await
+  }
+
+  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Terminate).await
+  }
+
+  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Suspend).await
+  }
+
+  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Resume).await
   }
 
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {

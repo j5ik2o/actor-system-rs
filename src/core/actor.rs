@@ -32,9 +32,16 @@ pub trait Actor: Debug + Send + Sync {
 
 #[async_trait]
 pub trait AnyActor: Debug + Send + Sync {
-  async fn invoke(&mut self, message: AnyMessage);
-  async fn system_invoke(&mut self, system_message: SystemMessage);
+  fn path(&self) -> String;
+
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
   async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
-  fn path(&self) -> String;
+
+  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>>;
+  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>>;
+  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>>;
+  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>>;
+
+  async fn invoke(&mut self, message: AnyMessage);
+  async fn system_invoke(&mut self, system_message: SystemMessage);
 }
