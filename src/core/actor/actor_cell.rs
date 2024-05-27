@@ -32,6 +32,34 @@ impl<A: Actor> ActorCell<A> {
 
 #[async_trait]
 impl<A: Actor + 'static> AnyActor for ActorCell<A> {
+  fn path(&self) -> String {
+    self.self_ref.path().to_string()
+  }
+
+  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+    self.mailbox.queue_writer().await.offer(message).await
+  }
+
+  async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
+    self.mailbox.system_queue_writer().await.offer(system_message).await
+  }
+
+  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Create).await
+  }
+
+  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Terminate).await
+  }
+
+  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Suspend).await
+  }
+
+  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>> {
+    self.send_system_message(SystemMessage::Resume).await
+  }
+
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
       let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
@@ -62,33 +90,5 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
         self.actor.around_post_stop(ctx).await;
       }
     }
-  }
-
-  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>> {
-    self.send_system_message(SystemMessage::Create).await
-  }
-
-  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>> {
-    self.send_system_message(SystemMessage::Terminate).await
-  }
-
-  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>> {
-    self.send_system_message(SystemMessage::Suspend).await
-  }
-
-  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>> {
-    self.send_system_message(SystemMessage::Resume).await
-  }
-
-  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
-    self.mailbox.queue_writer().await.offer(message).await
-  }
-
-  async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
-    self.mailbox.system_queue_writer().await.offer(system_message).await
-  }
-
-  fn path(&self) -> String {
-    self.self_ref.path().to_string()
   }
 }
