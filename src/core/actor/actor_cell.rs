@@ -1,17 +1,19 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::actor_system::ActorSystem;
-use crate::core::actor::Actor;
+use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::any_message::AnyMessage;
-use crate::core::util::queue::QueueWriter;
+use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
 
 #[derive(Debug)]
 pub struct ActorCell<A: Actor> {
-  pub(crate) actor: A,
-  pub(crate) mailbox_queue_writer: QueueWriter<AnyMessage>,
-  pub(crate) self_ref: ActorRef<A::M>,
-  pub(crate) system: Arc<ActorSystem>,
+  actor: A,
+  mailbox_queue_writer: QueueWriter<AnyMessage>,
+  self_ref: ActorRef<A::M>,
+  system: Arc<ActorSystem>,
 }
 
 impl<A: Actor> ActorCell<A> {
@@ -27,5 +29,19 @@ impl<A: Actor> ActorCell<A> {
       self_ref,
       system,
     }
+  }
+}
+
+#[async_trait]
+impl<A: Actor + 'static> AnyActor for ActorCell<A> {
+  async fn invoke(&mut self, mut message: AnyMessage) {
+    if let Ok(message) = message.take::<A::M>() {
+      let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
+      self.actor.receive(ctx, message).await;
+    }
+  }
+
+  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+    self.mailbox_queue_writer.offer(message).await
   }
 }

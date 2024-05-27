@@ -30,7 +30,7 @@ impl Dispatcher {
       tokio::spawn(async move {
         while let Ok(Some(message)) = reader.poll().await {
           if let Some(actor) = actor.as_ref() {
-            actor.lock().await.receive(message).await;
+            actor.lock().await.invoke(message).await;
           }
         }
       });

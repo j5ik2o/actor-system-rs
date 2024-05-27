@@ -21,20 +21,6 @@ pub trait Actor: Debug + Send + Sync {
 
 #[async_trait]
 pub trait AnyActor: Debug + Send + Sync {
-  async fn receive(&mut self, message: AnyMessage);
-  async fn enqueue(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
-}
-
-#[async_trait]
-impl<A: Actor + 'static> AnyActor for ActorCell<A> {
-  async fn receive(&mut self, mut message: AnyMessage) {
-    if let Ok(message) = message.take::<A::M>() {
-      let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
-      self.actor.receive(ctx, message).await;
-    }
-  }
-
-  async fn enqueue(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
-    self.mailbox_queue_writer.offer(message).await
-  }
+  async fn invoke(&mut self, message: AnyMessage);
+  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
 }
