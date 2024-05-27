@@ -25,7 +25,7 @@ pub trait Actor: Debug + Send + Sync {
   async fn around_post_stop(&mut self, ctx: ActorContext<Self::M>) {
     self.post_stop(ctx).await;
   }
-  async fn post_stop(&mut self, ctx: ActorContext<Self::M>);
+  async fn post_stop(&mut self, ctx: ActorContext<Self::M>) {}
 
   async fn receive(&mut self, ctx: ActorContext<Self::M>, message: Self::M);
 }

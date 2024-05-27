@@ -21,10 +21,10 @@ impl<M: Message> ActorRef<M> {
   }
 
   pub async fn tell(&self, system: &ActorSystem, message: M) {
-    if let Some(actor) = system.actors.lock().await.get(&self.path) {
+    if let Some(actor_arc) = system.find_actor(&self.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.path, message);
       let any_message = AnyMessage::new(message);
-      actor.lock().await.send_message(any_message).await.unwrap();
+      actor_arc.lock().await.send_message(any_message).await.unwrap();
       system.dispatch().await;
     } else {
       panic!("actor not found");

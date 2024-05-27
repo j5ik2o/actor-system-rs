@@ -12,7 +12,7 @@ use crate::ActorPath;
 
 #[derive(Debug, Clone)]
 pub struct ActorSystem {
-  pub(crate) actors: Arc<Mutex<HashMap<ActorPath, Arc<Mutex<Box<dyn AnyActor>>>>>>,
+  actors: Arc<Mutex<HashMap<ActorPath, Arc<Mutex<Box<dyn AnyActor>>>>>>,
   dispatcher: Dispatcher,
   termination_notify: Arc<Notify>,
 }
@@ -24,6 +24,11 @@ impl ActorSystem {
       dispatcher: Dispatcher::new(),
       termination_notify: Arc::new(Notify::new()),
     }
+  }
+
+  pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
+    let actors = self.actors.lock().await;
+    actors.get(path).cloned()
   }
 
   pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, actor: A) -> ActorRef<A::M> {
@@ -48,7 +53,7 @@ impl ActorSystem {
     self.termination_notify.notify_waiters();
   }
 
-  pub async fn dispatch(&self) {
+  pub(crate) async fn dispatch(&self) {
     self.dispatcher.run().await;
   }
 }
