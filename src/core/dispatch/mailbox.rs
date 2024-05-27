@@ -230,7 +230,7 @@ impl Mailbox {
     inner.actor = Arc::new(Some(actor));
   }
 
-  pub async fn execute(&mut self) {
+  pub(crate) async fn execute(&mut self) {
     if !self.is_closed().await {
       self.process_system_mailbox().await;
       self.process_mailbox().await;
