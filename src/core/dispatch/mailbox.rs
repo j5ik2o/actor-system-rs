@@ -291,11 +291,11 @@ impl Mailbox {
           }
         }
         Ok(None) => {
-          let actor_path = "";
+          let actor_path = actor_arc.lock().await.path();
           log::warn!("Mailbox process message error: None, actor_path = {}", actor_path);
         }
         Err(err) => {
-          let actor_path = "";
+          let actor_path = actor_arc.lock().await.path();
           log::error!("Mailbox process message error: {:?}, actor_path = {}", err, actor_path);
           break;
         }
