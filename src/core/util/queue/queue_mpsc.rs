@@ -68,7 +68,7 @@ impl<E: Element + 'static> QueueMPSC<E> {
   ///
   /// # Arguments / 引数
   /// - `elements` - The elements to be updated. / 更新する要素。
-  pub async fn with_elements(mut self, elements: impl IntoIterator<Item = E> + Send) -> Self {
+  pub async fn with_elements(self, elements: impl IntoIterator<Item = E> + Send) -> Self {
     self.writer().offer_all(elements).await.unwrap();
     self
   }
@@ -129,7 +129,7 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSCSender<E> {
 #[async_trait::async_trait]
 impl<E: Element + 'static> QueueWriteBehavior<E> for QueueMPSCSender<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
-    let mut source_lock = self.source.lock().await;
+    let source_lock = self.source.lock().await;
     match source_lock.tx.send(element).await {
       Ok(_) => {
         let mut inner_guard = source_lock.inner.lock().await;
@@ -157,7 +157,7 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueMPSCReceiver<E> {
 #[async_trait::async_trait]
 impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueMPSCReceiver<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
-    let mut source_lock = self.source.lock().await;
+    let source_lock = self.source.lock().await;
     let mut inner_guard = source_lock.inner.lock().await;
     match inner_guard.rx.try_recv() {
       Ok(element) => {

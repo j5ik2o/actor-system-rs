@@ -1,6 +1,7 @@
+use std::cmp::max;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -9,7 +10,7 @@ use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::util::queue::{
-  create_queue, Queue, QueueBehavior, QueueReadFactoryBehavior, QueueReader, QueueSize, QueueType,
+  create_queue, Queue, QueueBehavior, QueueReadBehavior, QueueReadFactoryBehavior, QueueReader, QueueSize, QueueType,
   QueueWriteFactoryBehavior, QueueWriter,
 };
 
@@ -61,11 +62,6 @@ impl Mailbox {
   pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
     let queue = self.queue().await;
     queue.reader()
-  }
-
-  pub(crate) async fn actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>> {
-    let inner = self.inner.lock().await;
-    inner.actor.clone()
   }
 
   pub(crate) async fn get_status(&self) -> MailboxStatus {
@@ -224,8 +220,87 @@ impl Mailbox {
     }
   }
 
-  pub async fn set_actor(&mut self, actor: Arc<Mutex<Box<dyn AnyActor>>>) {
+  pub(crate) async fn get_actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>> {
+    let inner = self.inner.lock().await;
+    inner.actor.clone()
+  }
+
+  pub(crate) async fn set_actor(&mut self, actor: Arc<Mutex<Box<dyn AnyActor>>>) {
     let mut inner = self.inner.lock().await;
     inner.actor = Arc::new(Some(actor));
+  }
+
+  pub async fn execute(&mut self) {
+    if !self.is_closed().await {
+      self.process_system_mailbox().await;
+      self.process_mailbox().await;
+    }
+    self.set_as_idle().await;
+  }
+
+  async fn process_system_mailbox(&mut self) {
+    if self.system_queue.non_empty().await && !self.is_closed().await {
+      match self.system_queue.reader().poll().await {
+        Ok(Some(msg)) => {
+          let actor_opt_arc = self.get_actor().await;
+          if let Some(actor_arc) = actor_opt_arc.as_ref() {
+            actor_arc.lock().await.system_invoke(msg).await;
+          }
+        }
+        _ => {}
+      }
+    }
+  }
+
+  async fn process_mailbox(&mut self) {
+    let (left, deadline_ns) = {
+      let inner = self.inner.lock().await;
+      let throughput = inner.throughput;
+      let l = max(throughput, 1);
+      let is_throughput_deadline_time_defined = inner.is_throughput_deadline_time_defined.clone();
+      let d = if is_throughput_deadline_time_defined.load(Ordering::SeqCst) {
+        let now = SystemTime::now();
+        let throughput_deadline_time = inner.throughput_deadline_time;
+        now.elapsed().unwrap().as_nanos() + throughput_deadline_time.as_nanos()
+      } else {
+        0
+      };
+      (l, d)
+    };
+    self.process_mailbox_with(left, deadline_ns).await
+  }
+
+  async fn process_mailbox_with(&mut self, mut left: usize, deadline_ns: u128) {
+    while left > 0 {
+      let is_should_process_message = self.should_process_message().await;
+      if !is_should_process_message {
+        break;
+      }
+
+      match self.queue.reader().poll().await {
+        Ok(Some(message)) => {
+          let actor_opt_arc = self.get_actor().await;
+          if let Some(actor_arc) = actor_opt_arc.as_ref() {
+            actor_arc.lock().await.invoke(message).await;
+          }
+          self.process_system_mailbox().await;
+          let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
+          let now = SystemTime::now();
+          if is_throughput_deadline_time_defined && (now.elapsed().unwrap().as_nanos()) >= deadline_ns {
+            break;
+          }
+        }
+        Ok(None) => {
+          let actor_path = "";
+          log::warn!("Mailbox process message error: None, actor_path = {}", actor_path);
+        }
+        Err(err) => {
+          let actor_path = "";
+          log::error!("Mailbox process message error: {:?}, actor_path = {}", err, actor_path);
+          break;
+        }
+      }
+      left -= 1;
+    }
   }
 }

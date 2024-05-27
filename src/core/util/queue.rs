@@ -521,7 +521,7 @@ impl<T: Element + 'static> QueueBehavior<T> for Queue<T> {
 
 pub struct QueueStreamIter<E, QR> {
   q: QR,
-  current_future: Option<Pin<Box<dyn Future<Output = Result<Option<E>, QueueError<E>>> + Send>>>,
+  // current_future: Option<Pin<Box<dyn Future<Output = Result<Option<E>, QueueError<E>>> + Send>>>,
   p: PhantomData<E>,
 }
 
@@ -529,7 +529,7 @@ impl<E: Element + 'static, QR: QueueReadBehavior<E>> QueueStreamIter<E, QR> {
   pub fn new(q: QR) -> Self {
     QueueStreamIter {
       q,
-      current_future: None,
+      // current_future: None,
       p: PhantomData,
     }
   }

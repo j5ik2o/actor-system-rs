@@ -7,6 +7,7 @@ use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::any_message::AnyMessage;
+use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
 
 #[derive(Debug)]
@@ -40,6 +41,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
       self.actor.receive(ctx, message).await;
     }
+  }
+
+  async fn system_invoke(&mut self, system_message: SystemMessage) {
+    println!("system_invoke: {:?}", system_message);
   }
 
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {

@@ -113,7 +113,7 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedListSender<E> {
 #[async_trait::async_trait]
 impl<E: Element + 'static> QueueWriteBehavior<E> for QueueLinkedListSender<E> {
   async fn offer(&mut self, element: E) -> Result<(), QueueError<E>> {
-    let mut source_lock = self.source.lock().await;
+    let source_lock = self.source.lock().await;
     if self.non_full().await {
       let mut mg = source_lock.elements.lock().await;
       mg.push_back(element);
@@ -140,7 +140,7 @@ impl<E: Element + 'static> QueueBehavior<E> for QueueLinkedListReceiver<E> {
 #[async_trait::async_trait]
 impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueLinkedListReceiver<E> {
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>> {
-    let mut source_lock = self.source.lock().await;
+    let source_lock = self.source.lock().await;
     let mut mg = source_lock.elements.lock().await;
     Ok(mg.pop_front())
   }
