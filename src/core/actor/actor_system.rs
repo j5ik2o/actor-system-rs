@@ -7,7 +7,6 @@ use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::dispatcher::Dispatcher;
-use crate::core::dispatch::mailbox::system_mailbox::SystemMailbox;
 use crate::core::dispatch::mailbox::Mailbox;
 use crate::ActorPath;
 
@@ -31,17 +30,14 @@ impl ActorSystem {
     let actor_ref = ActorRef::new(path.clone());
     let mut actors = self.actors.lock().await;
     let mut mailbox = Mailbox::new().await;
-    let mut system_mailbox = SystemMailbox::new();
     let actor_cell = ActorCell::new(
       actor,
-      mailbox.queue_writer().await.clone(),
-      system_mailbox.sender.clone(),
+      mailbox.queue_writer().await,
       actor_ref.clone(),
       Arc::new(self.clone()),
     );
     let actor_cell_arc = Arc::new(Mutex::new(Box::new(actor_cell) as Box<dyn AnyActor>));
     mailbox.set_actor(actor_cell_arc.clone()).await;
-    system_mailbox.set_actor(actor_cell_arc.clone());
     actors.insert(path.clone(), actor_cell_arc);
     self.dispatcher.register(mailbox).await;
     actor_ref

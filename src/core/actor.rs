@@ -7,7 +7,7 @@ use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::message::Message;
-use crate::core::util::queue::QueueWriteBehavior;
+use crate::core::util::queue::{QueueError, QueueWriteBehavior};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -20,7 +20,7 @@ pub trait Actor: Debug + Send + Sync {
 #[async_trait]
 pub trait AnyActor: Debug + Send + Sync {
   async fn receive(&mut self, message: AnyMessage);
-  async fn enqueue(&mut self, message: AnyMessage);
+  async fn enqueue(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
 }
 
 #[async_trait]
@@ -32,7 +32,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     }
   }
 
-  async fn enqueue(&mut self, message: AnyMessage) {
-    let _ = self.mailbox_sender.offer(message).await;
+  async fn enqueue(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+    self.mailbox_queue_writer.offer(message).await
   }
 }
