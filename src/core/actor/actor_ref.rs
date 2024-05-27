@@ -24,6 +24,7 @@ impl<M: Message> ActorRef<M> {
     if let Some(actor) = system.actors.lock().await.get(&self.path) {
       let any_message = AnyMessage::new(message);
       actor.lock().await.send_message(any_message).await.unwrap();
+      system.dispatch().await;
     } else {
       panic!("actor not found");
     }

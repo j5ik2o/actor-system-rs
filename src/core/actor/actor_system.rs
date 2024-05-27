@@ -13,7 +13,7 @@ use crate::ActorPath;
 #[derive(Debug, Clone)]
 pub struct ActorSystem {
   pub(crate) actors: Arc<Mutex<HashMap<ActorPath, Arc<Mutex<Box<dyn AnyActor>>>>>>,
-  pub dispatcher: Dispatcher,
+  dispatcher: Dispatcher,
   termination_notify: Arc<Notify>,
 }
 
@@ -50,5 +50,9 @@ impl ActorSystem {
   pub async fn terminate(&self) {
     self.dispatcher.stop().await;
     self.termination_notify.notify_waiters();
+  }
+
+  pub async fn dispatch(&self) {
+    self.dispatcher.run().await;
   }
 }

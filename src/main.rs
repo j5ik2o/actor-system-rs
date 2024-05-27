@@ -33,10 +33,10 @@ impl Actor for MyActor {
 async fn main() {
   let system = ActorSystem::new();
   let actor_path = "my_actor".to_string();
+
   let actor_ref = system.actor_of(actor_path.clone(), MyActor).await;
 
   actor_ref.tell(&system, MyMessage { value: 32 }).await;
-  system.dispatcher.run().await;
 
   system.when_terminated().await;
 }
