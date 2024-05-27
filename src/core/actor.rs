@@ -16,10 +16,17 @@ pub mod actor_system;
 #[async_trait]
 pub trait Actor: Debug + Send + Sync {
   type M: Message;
+
   async fn around_pre_start(&mut self, ctx: ActorContext<Self::M>) {
     self.pre_start(ctx).await;
   }
   async fn pre_start(&mut self, ctx: ActorContext<Self::M>);
+
+  async fn around_post_stop(&mut self, ctx: ActorContext<Self::M>) {
+    self.post_stop(ctx).await;
+  }
+  async fn post_stop(&mut self, ctx: ActorContext<Self::M>);
+
   async fn receive(&mut self, ctx: ActorContext<Self::M>, message: Self::M);
 }
 

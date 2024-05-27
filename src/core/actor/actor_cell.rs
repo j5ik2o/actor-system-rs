@@ -57,6 +57,8 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       }
       SystemMessage::Terminate => {
         log::debug!("Terminate: {}", self.path());
+        let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
+        self.actor.around_post_stop(ctx).await;
       }
     }
   }
