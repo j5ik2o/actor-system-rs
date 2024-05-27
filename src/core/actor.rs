@@ -24,4 +24,5 @@ pub trait AnyActor: Debug + Send + Sync {
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
+  fn path(&self) -> String;
 }

@@ -44,10 +44,14 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
   }
 
   async fn system_invoke(&mut self, system_message: SystemMessage) {
-    println!("system_invoke: {:?}", system_message);
+    log::debug!("system_invoke: {:?}", system_message);
   }
 
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
     self.mailbox_queue_writer.offer(message).await
+  }
+
+  fn path(&self) -> String {
+    self.self_ref.path().to_string()
   }
 }

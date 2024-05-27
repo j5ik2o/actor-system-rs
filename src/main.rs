@@ -1,3 +1,5 @@
+use std::env;
+
 use async_trait::async_trait;
 
 use simple_actor_rs::core::actor::actor_context::ActorContext;
@@ -25,12 +27,16 @@ impl Actor for MyActor {
   type M = MyMessage;
 
   async fn receive(&mut self, ctx: ActorContext<Self::M>, message: Self::M) {
-    println!("received a message on {}, {:?}", ctx.self_ref.path(), message);
+    log::debug!("received a message on {}, {:?}", ctx.self_ref.path(), message);
     ctx.terminate_system().await;
   }
 }
+
 #[tokio::main]
 async fn main() {
+  let _ = env::set_var("RUST_LOG", "debug");
+  let _ = env_logger::init();
+
   let system = ActorSystem::new();
   let actor_path = "my_actor".to_string();
 

@@ -10,7 +10,7 @@ use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::util::queue::{
-  create_queue, Queue, QueueBehavior, QueueReadBehavior, QueueReadFactoryBehavior, QueueReader, QueueSize, QueueType,
+  create_queue, Queue, QueueBehavior, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
   QueueWriteFactoryBehavior, QueueWriter,
 };
 
@@ -59,10 +59,10 @@ impl Mailbox {
     queue.writer()
   }
 
-  pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
-    let queue = self.queue().await;
-    queue.reader()
-  }
+  // pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
+  //   let queue = self.queue().await;
+  //   queue.reader()
+  // }
 
   pub(crate) async fn get_status(&self) -> MailboxStatus {
     let inner = self.inner.lock().await;
@@ -291,11 +291,21 @@ impl Mailbox {
           }
         }
         Ok(None) => {
-          let actor_path = "";
+          let actor_opt_arc = self.get_actor().await;
+          let actor_path = if let Some(actor_arc) = actor_opt_arc.as_ref() {
+            actor_arc.lock().await.path().to_string()
+          } else {
+            "unknown".to_string()
+          };
           log::warn!("Mailbox process message error: None, actor_path = {}", actor_path);
         }
         Err(err) => {
-          let actor_path = "";
+          let actor_opt_arc = self.get_actor().await;
+          let actor_path = if let Some(actor_arc) = actor_opt_arc.as_ref() {
+            actor_arc.lock().await.path().to_string()
+          } else {
+            "unknown".to_string()
+          };
           log::error!("Mailbox process message error: {:?}, actor_path = {}", err, actor_path);
           break;
         }
