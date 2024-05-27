@@ -16,6 +16,10 @@ pub mod actor_system;
 #[async_trait]
 pub trait Actor: Debug + Send + Sync {
   type M: Message;
+  async fn around_pre_start(&mut self, ctx: ActorContext<Self::M>) {
+    self.pre_start(ctx).await;
+  }
+  async fn pre_start(&mut self, ctx: ActorContext<Self::M>);
   async fn receive(&mut self, ctx: ActorContext<Self::M>, message: Self::M);
 }
 
@@ -24,5 +28,6 @@ pub trait AnyActor: Debug + Send + Sync {
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
+  async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
   fn path(&self) -> String;
 }

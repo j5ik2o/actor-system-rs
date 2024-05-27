@@ -59,6 +59,15 @@ impl Mailbox {
     queue.writer()
   }
 
+  pub(crate) async fn system_queue(&self) -> &Queue<SystemMessage> {
+    &self.system_queue
+  }
+
+  pub(crate) async fn system_queue_writer(&self) -> QueueWriter<SystemMessage> {
+    let queue = self.system_queue().await;
+    queue.writer()
+  }
+
   // pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
   //   let queue = self.queue().await;
   //   queue.reader()

@@ -26,8 +26,12 @@ pub struct MyActor;
 impl Actor for MyActor {
   type M = MyMessage;
 
+  async fn pre_start(&mut self, ctx: ActorContext<Self::M>) {
+    log::debug!("pre_start: {}", ctx.self_ref.path());
+  }
+
   async fn receive(&mut self, ctx: ActorContext<Self::M>, message: Self::M) {
-    log::debug!("received a message on {}, {:?}", ctx.self_ref.path(), message);
+    log::debug!("receive: a message on {}, {:?}", ctx.self_ref.path(), message);
     ctx.terminate_system().await;
   }
 }
