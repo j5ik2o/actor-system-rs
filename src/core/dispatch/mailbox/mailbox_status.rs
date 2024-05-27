@@ -1,5 +1,6 @@
-use num_enum::TryFromPrimitive;
 use std::fmt::{Display, Formatter};
+
+use num_enum::TryFromPrimitive;
 
 #[derive(Debug, Clone, PartialEq, Eq, TryFromPrimitive)]
 #[repr(u32)]

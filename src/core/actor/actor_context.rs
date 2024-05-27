@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::dispatch::message::Message;
-use std::sync::Arc;
 
 pub struct ActorContext<M: Message> {
   pub self_ref: ActorRef<M>,

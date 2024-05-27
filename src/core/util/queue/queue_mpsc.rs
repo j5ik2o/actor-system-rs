@@ -5,7 +5,6 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
 
 use crate::core::util::element::Element;
-use crate::core::util::queue::queue_vec::{QueueVec, QueueVecReceiver, QueueVecSender};
 use crate::core::util::queue::{
   QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueStreamIter,
   QueueWriteBehavior, QueueWriteFactoryBehavior,

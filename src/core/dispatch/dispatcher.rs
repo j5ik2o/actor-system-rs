@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::StreamExt;
 use tokio::sync::Mutex;
 
 use crate::core::dispatch::mailbox::Mailbox;

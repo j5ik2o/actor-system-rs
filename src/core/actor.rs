@@ -1,15 +1,17 @@
-pub mod actor_cell;
-pub mod actor_context;
-pub mod actor_ref;
-pub mod actor_system;
+use std::fmt::Debug;
+
+use async_trait::async_trait;
 
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::message::Message;
 use crate::core::util::queue::{QueueError, QueueWriteBehavior};
-use async_trait::async_trait;
-use std::fmt::Debug;
+
+pub mod actor_cell;
+pub mod actor_context;
+pub mod actor_ref;
+pub mod actor_system;
 
 #[async_trait]
 pub trait Actor: Debug + Send + Sync {

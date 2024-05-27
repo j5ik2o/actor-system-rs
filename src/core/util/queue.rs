@@ -1,20 +1,21 @@
-mod queue_linkedlist;
-mod queue_mpsc;
-pub mod queue_vec;
+use std::cmp::Ordering;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use futures::Stream;
+use thiserror::Error;
 
 use crate::core::util::element::Element;
 // use crate::core::util::queue::blocking_queue::BlockingQueue;
 use crate::core::util::queue::queue_linkedlist::{QueueLinkedList, QueueLinkedListReceiver, QueueLinkedListSender};
 use crate::core::util::queue::queue_mpsc::{QueueMPSC, QueueMPSCReceiver, QueueMPSCSender};
 use crate::core::util::queue::queue_vec::{QueueVec, QueueVecReceiver, QueueVecSender};
-use async_trait::async_trait;
-use futures::Stream;
-use std::cmp::Ordering;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use thiserror::Error;
+
+mod queue_linkedlist;
+mod queue_mpsc;
+pub mod queue_vec;
 
 /// An error that occurs when a queue operation fails.<br/>
 /// キューの操作に失敗した場合に発生するエラー。

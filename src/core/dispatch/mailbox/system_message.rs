@@ -1,4 +1,5 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+
 use crate::core::util::element::Element;
 
 #[derive(Debug, Clone)]
