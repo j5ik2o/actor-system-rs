@@ -1,14 +1,11 @@
 use std::env;
 
-use async_trait::async_trait;
-
-use simple_actor_rs::core::actor::actor_context::ActorContext;
-use simple_actor_rs::core::actor::actor_path::ActorPath;
-use simple_actor_rs::core::actor::actor_system::ActorSystem;
-use simple_actor_rs::core::actor::address::Address;
-use simple_actor_rs::core::actor::Actor;
-use simple_actor_rs::core::dispatch::message::Message;
-use simple_actor_rs::core::util::element::Element;
+use actor_system_rs::core::actor::actor_context::ActorContext;
+use actor_system_rs::core::actor::actor_path::ActorPath;
+use actor_system_rs::core::actor::actor_system::ActorSystem;
+use actor_system_rs::core::actor::Actor;
+use actor_system_rs::core::dispatch::message::Message;
+use actor_system_rs::core::util::element::Element;
 
 // メッセージ型の例
 #[derive(Clone, Debug)]
@@ -24,7 +21,7 @@ impl Message for MyMessage {}
 #[derive(Debug)]
 pub struct MyActor;
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Actor for MyActor {
   type M = MyMessage;
 
@@ -47,7 +44,6 @@ async fn main() {
   let user_path = ActorPath::from_string("actor://actor_system/system/root/user/actor1");
 
   let actor_ref = system.actor_of(user_path, MyActor).await;
-
   actor_ref.tell(&system, MyMessage { value: 32 }).await;
 
   system.when_terminated().await;
