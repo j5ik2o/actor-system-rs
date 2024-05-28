@@ -242,6 +242,8 @@ pub trait QueueReadBehavior<E: Element>: QueueBehavior<E> {
   /// - `Ok(Some(element))` - If the element is retrieved successfully. / 要素が正常に取得された場合。
   /// - `Ok(None)` - If the queue is empty. / キューが空の場合。
   async fn poll(&mut self) -> Result<Option<E>, QueueError<E>>;
+
+  async fn clean_up(&mut self);
 }
 
 /// A trait that defines the behavior of a queue that can be peeked.<br/>
@@ -448,6 +450,14 @@ impl<E: Element + 'static> QueueReadBehavior<E> for QueueReader<E> {
       QueueReader::VecDequeue(inner) => inner.poll().await,
       QueueReader::LinkedList(inner) => inner.poll().await,
       QueueReader::MPSC(inner) => inner.poll().await,
+    }
+  }
+
+  async fn clean_up(&mut self) {
+    match self {
+      QueueReader::VecDequeue(inner) => inner.clean_up().await,
+      QueueReader::LinkedList(inner) => inner.clean_up().await,
+      QueueReader::MPSC(inner) => inner.clean_up().await,
     }
   }
 }

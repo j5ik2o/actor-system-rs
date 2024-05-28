@@ -257,7 +257,6 @@ impl ActorPathBehavior for ActorPath {
 
   fn with_child(self, child: &str) -> Self {
     let (name, uid) = actor_cell::split_name_and_uid(&child);
-    log::debug!(">>> name = {}, uid = {}", name, uid);
     ActorPath::of_child(self, name, uid)
   }
 

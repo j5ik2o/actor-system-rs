@@ -51,12 +51,20 @@ impl Mailbox {
     }
   }
 
+  pub(crate) async fn has_messages(&self) -> bool {
+    self.message_queue.non_empty().await
+  }
+
   pub(crate) async fn enqueue_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
     self.message_queue.writer().offer(message).await
   }
 
   pub(crate) async fn dequeue_message(&self) -> Result<Option<AnyMessage>, QueueError<AnyMessage>> {
     self.message_queue.reader().poll().await
+  }
+
+  pub(crate) async fn has_system_messages(&self) -> bool {
+    self.system_message_queue.non_empty().await
   }
 
   pub(crate) async fn enqueue_system_message(
@@ -245,7 +253,7 @@ impl Mailbox {
   }
 
   async fn process_system_mailbox(&mut self) {
-    if self.system_message_queue.non_empty().await && !self.is_closed().await {
+    if self.has_system_messages().await && !self.is_closed().await {
       match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
@@ -311,6 +319,11 @@ impl Mailbox {
       }
       left -= 1;
     }
+  }
+
+  async fn clean_up(&self) {
+    self.message_queue.reader().clean_up().await;
+    self.system_message_queue.reader().clean_up().await;
   }
 
   async fn get_actor_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {

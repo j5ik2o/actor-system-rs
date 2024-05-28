@@ -141,6 +141,12 @@ impl<E: Element + 'static> QueueReadBehavior<E> for QueueVecReceiver<E> {
     let mut mg = source_lock.elements.lock().await;
     Ok(mg.pop_front())
   }
+
+  async fn clean_up(&mut self) {
+    let source_lock = self.source.lock().await;
+    let mut mg = source_lock.elements.lock().await;
+    mg.clear();
+  }
 }
 
 #[async_trait::async_trait]

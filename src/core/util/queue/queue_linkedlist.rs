@@ -144,4 +144,10 @@ impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueLinkedListReceiver<
     let mut mg = source_lock.elements.lock().await;
     Ok(mg.pop_front())
   }
+
+  async fn clean_up(&mut self) {
+    let source_lock = self.source.lock().await;
+    let mut mg = source_lock.elements.lock().await;
+    mg.clear();
+  }
 }

@@ -168,4 +168,11 @@ impl<'a, E: Element + 'static> QueueReadBehavior<E> for QueueMPSCReceiver<E> {
       Err(TryRecvError::Disconnected) => Err(QueueError::<E>::PoolError),
     }
   }
+
+  async fn clean_up(&mut self) {
+    let source_lock = self.source.lock().await;
+    let mut inner_guard = source_lock.inner.lock().await;
+    inner_guard.count = QueueSize::Limited(0);
+    inner_guard.rx.close();
+  }
 }
