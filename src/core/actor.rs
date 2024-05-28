@@ -10,10 +10,10 @@ use crate::core::util::queue::QueueError;
 
 pub mod actor_cell;
 pub mod actor_context;
+pub mod actor_path;
 pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
-pub mod actor_path;
 
 #[async_trait]
 pub trait Actor: Debug + Send + Sync {

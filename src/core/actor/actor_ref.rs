@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use crate::core::actor::actor_path::ActorPath;
+use std::marker::PhantomData;
 
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::dispatch::any_message::AnyMessage;
