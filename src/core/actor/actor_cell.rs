@@ -63,11 +63,11 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
   }
 
   async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
-    self.mailbox.send_message(message).await
+    self.mailbox.enqueue_message(message).await
   }
 
   async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
-    self.mailbox.send_system_message(system_message).await
+    self.mailbox.enqueue_system_message(system_message).await
   }
 
   async fn start(&mut self) -> Result<(), QueueError<SystemMessage>> {

@@ -51,15 +51,23 @@ impl Mailbox {
     }
   }
 
-  pub(crate) async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+  pub(crate) async fn enqueue_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
     self.message_queue.writer().offer(message).await
   }
 
-  pub(crate) async fn send_system_message(
-    &mut self,
+  pub(crate) async fn dequeue_message(&self) -> Result<Option<AnyMessage>, QueueError<AnyMessage>> {
+    self.message_queue.reader().poll().await
+  }
+
+  pub(crate) async fn enqueue_system_message(
+    &self,
     system_message: SystemMessage,
   ) -> Result<(), QueueError<SystemMessage>> {
     self.system_message_queue.writer().offer(system_message).await
+  }
+
+  pub(crate) async fn dequeue_system_message(&self) -> Result<Option<SystemMessage>, QueueError<SystemMessage>> {
+    self.system_message_queue.reader().poll().await
   }
 
   pub(crate) async fn get_status(&self) -> MailboxStatus {
@@ -238,7 +246,7 @@ impl Mailbox {
 
   async fn process_system_mailbox(&mut self) {
     if self.system_message_queue.non_empty().await && !self.is_closed().await {
-      match self.system_message_queue.reader().poll().await {
+      match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
@@ -275,7 +283,7 @@ impl Mailbox {
         break;
       }
 
-      match self.message_queue.reader().poll().await {
+      match self.dequeue_message().await {
         Ok(Some(message)) => {
           let actor_arc = self.get_actor_arc().await.unwrap();
           actor_arc.lock().await.invoke(message).await;
