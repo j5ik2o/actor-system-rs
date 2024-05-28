@@ -30,14 +30,14 @@ struct MailboxInner {
 #[derive(Debug, Clone)]
 pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
-  queue: Queue<AnyMessage>,
-  system_queue: Queue<SystemMessage>,
+  message_queue: Queue<AnyMessage>,
+  system_message_queue: Queue<SystemMessage>,
 }
 
 impl Mailbox {
   pub async fn new() -> Self {
-    let queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
-    let system_queue = create_queue::<SystemMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
+    let message_queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
+    let system_message_queue = create_queue::<SystemMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     Self {
       inner: Arc::new(Mutex::new(MailboxInner {
         current_status: Arc::new(AtomicU32::new(MailboxStatus::Open as u32)),
@@ -46,38 +46,20 @@ impl Mailbox {
         throughput_deadline_time: Duration::from_millis(100),
         actor: Arc::new(None),
       })),
-      queue,
-      system_queue,
+      message_queue,
+      system_message_queue,
     }
   }
 
-  async fn queue(&self) -> &Queue<AnyMessage> {
-    &self.queue
-  }
-
-  async fn queue_writer(&self) -> QueueWriter<AnyMessage> {
-    let queue = self.queue().await;
-    queue.writer()
-  }
-
-  async fn system_queue(&self) -> &Queue<SystemMessage> {
-    &self.system_queue
-  }
-
-  async fn system_queue_writer(&self) -> QueueWriter<SystemMessage> {
-    let queue = self.system_queue().await;
-    queue.writer()
-  }
-
   pub(crate) async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
-    self.queue_writer().await.offer(message).await
+    self.message_queue.writer().offer(message).await
   }
 
   pub(crate) async fn send_system_message(
     &mut self,
     system_message: SystemMessage,
   ) -> Result<(), QueueError<SystemMessage>> {
-    self.system_queue_writer().await.offer(system_message).await
+    self.system_message_queue.writer().offer(system_message).await
   }
 
   pub(crate) async fn get_status(&self) -> MailboxStatus {
@@ -121,10 +103,10 @@ impl Mailbox {
     let current_status_type = MailboxStatus::try_from(current_status).unwrap();
     let result = match current_status_type {
       cs if cs == MailboxStatus::Open || cs == MailboxStatus::Scheduled => {
-        has_message_hint || has_system_message_hint || self.queue.non_empty().await
+        has_message_hint || has_system_message_hint || self.message_queue.non_empty().await
       }
       cs if cs == MailboxStatus::Closed => false,
-      _ => has_system_message_hint || self.system_queue.non_empty().await,
+      _ => has_system_message_hint || self.system_message_queue.non_empty().await,
     };
     result
   }
@@ -255,8 +237,8 @@ impl Mailbox {
   }
 
   async fn process_system_mailbox(&mut self) {
-    if self.system_queue.non_empty().await && !self.is_closed().await {
-      match self.system_queue.reader().poll().await {
+    if self.system_message_queue.non_empty().await && !self.is_closed().await {
+      match self.system_message_queue.reader().poll().await {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
@@ -293,7 +275,7 @@ impl Mailbox {
         break;
       }
 
-      match self.queue.reader().poll().await {
+      match self.message_queue.reader().poll().await {
         Ok(Some(message)) => {
           let actor_arc = self.get_actor_arc().await.unwrap();
           actor_arc.lock().await.invoke(message).await;
