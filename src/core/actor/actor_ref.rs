@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
+use crate::core::actor::actor_path::ActorPath;
 
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::message::Message;
-use crate::ActorPath;
 
 #[derive(Debug, Clone)]
 pub struct ActorRef<M: Message> {
