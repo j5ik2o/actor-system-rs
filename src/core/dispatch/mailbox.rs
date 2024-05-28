@@ -1,3 +1,4 @@
+use futures::TryFutureExt;
 use std::cmp::max;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -10,8 +11,8 @@ use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::util::queue::{
-  create_queue, Queue, QueueBehavior, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
-  QueueWriteFactoryBehavior, QueueWriter,
+  create_queue, Queue, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
+  QueueWriteBehavior, QueueWriteFactoryBehavior, QueueWriter,
 };
 
 pub mod mailbox_status;
@@ -50,28 +51,34 @@ impl Mailbox {
     }
   }
 
-  pub(crate) async fn queue(&self) -> &Queue<AnyMessage> {
+  async fn queue(&self) -> &Queue<AnyMessage> {
     &self.queue
   }
 
-  pub(crate) async fn queue_writer(&self) -> QueueWriter<AnyMessage> {
+  async fn queue_writer(&self) -> QueueWriter<AnyMessage> {
     let queue = self.queue().await;
     queue.writer()
   }
 
-  pub(crate) async fn system_queue(&self) -> &Queue<SystemMessage> {
+  async fn system_queue(&self) -> &Queue<SystemMessage> {
     &self.system_queue
   }
 
-  pub(crate) async fn system_queue_writer(&self) -> QueueWriter<SystemMessage> {
+  async fn system_queue_writer(&self) -> QueueWriter<SystemMessage> {
     let queue = self.system_queue().await;
     queue.writer()
   }
 
-  // pub(crate) async fn queue_reader(&self) -> QueueReader<AnyMessage> {
-  //   let queue = self.queue().await;
-  //   queue.reader()
-  // }
+  pub(crate) async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+    self.queue_writer().await.offer(message).await
+  }
+
+  pub(crate) async fn send_system_message(
+    &mut self,
+    system_message: SystemMessage,
+  ) -> Result<(), QueueError<SystemMessage>> {
+    self.system_queue_writer().await.offer(system_message).await
+  }
 
   pub(crate) async fn get_status(&self) -> MailboxStatus {
     let inner = self.inner.lock().await;
@@ -288,10 +295,8 @@ impl Mailbox {
 
       match self.queue.reader().poll().await {
         Ok(Some(message)) => {
-          let actor_opt_arc = self.get_actor().await;
-          if let Some(actor_arc) = actor_opt_arc.as_ref() {
-            actor_arc.lock().await.invoke(message).await;
-          }
+          let actor_arc = self.get_actor_arc().await.unwrap();
+          actor_arc.lock().await.invoke(message).await;
           self.process_system_mailbox().await;
           let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
           let now = SystemTime::now();
@@ -300,26 +305,37 @@ impl Mailbox {
           }
         }
         Ok(None) => {
-          let actor_opt_arc = self.get_actor().await;
-          let actor_path = if let Some(actor_arc) = actor_opt_arc.as_ref() {
-            actor_arc.lock().await.path().to_string()
-          } else {
-            "unknown".to_string()
-          };
-          log::warn!("Mailbox process message error: None, actor_path = {}", actor_path);
+          log::warn!(
+            "Mailbox process message error: None, actor_path = {:?}",
+            self.get_actor_path().await
+          );
         }
         Err(err) => {
-          let actor_opt_arc = self.get_actor().await;
-          let actor_path = if let Some(actor_arc) = actor_opt_arc.as_ref() {
-            actor_arc.lock().await.path().to_string()
-          } else {
-            "unknown".to_string()
-          };
-          log::error!("Mailbox process message error: {:?}, actor_path = {}", err, actor_path);
+          log::error!(
+            "Mailbox process message error: {:?}, actor_path = {:?}",
+            err,
+            self.get_actor_path().await
+          );
           break;
         }
       }
       left -= 1;
+    }
+  }
+
+  async fn get_actor_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
+    let actor_opt_arc = self.get_actor().await;
+    if let Some(actor_arc) = actor_opt_arc.as_ref() {
+      Some(actor_arc.clone())
+    } else {
+      None
+    }
+  }
+
+  async fn get_actor_path(&self) -> Option<String> {
+    match self.get_actor_arc().await {
+      Some(actor_arc) => Some(actor_arc.lock().await.path().to_string()),
+      None => None,
     }
   }
 }
