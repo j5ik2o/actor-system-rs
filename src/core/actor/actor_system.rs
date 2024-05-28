@@ -6,8 +6,8 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::ActorRef;
-use crate::core::actor::{Actor, AnyActor};
 use crate::core::actor::props::Props;
+use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 

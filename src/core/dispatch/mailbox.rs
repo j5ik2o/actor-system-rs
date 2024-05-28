@@ -1,9 +1,9 @@
-use futures::TryFutureExt;
 use std::cmp::max;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::core::actor::AnyActor;

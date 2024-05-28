@@ -7,10 +7,10 @@ use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::core::actor::actor_cell;
 use once_cell::sync::Lazy;
 use oni_comb_uri_rs::models::uri::Uri;
 
+use crate::core::actor::actor_cell;
 use crate::core::actor::address::{actor_path_extractor, Address};
 
 const VALID_SYMBOLS: &'static str = "-_.*$+:@&=,!~';";
