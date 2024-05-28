@@ -14,6 +14,7 @@ pub mod actor_path;
 pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
+pub mod props;
 
 #[async_trait]
 pub trait Actor: Debug + Send + Sync {

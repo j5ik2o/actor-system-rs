@@ -7,6 +7,7 @@ use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::{Actor, AnyActor};
+use crate::core::actor::props::Props;
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -31,10 +32,11 @@ impl ActorSystem {
     actors.get(path).cloned()
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, actor: A) -> ActorRef<A::M> {
+  pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
     let actor_ref = ActorRef::new(path.clone());
     let mut actors = self.actors.lock().await;
     let mut mailbox = Mailbox::new().await;
+    let actor = props.create();
     let actor_cell = ActorCell::new(actor, mailbox.clone(), actor_ref.clone(), Arc::new(self.clone()));
     let actor_cell_arc = Arc::new(Mutex::new(Box::new(actor_cell) as Box<dyn AnyActor>));
     mailbox.set_actor(actor_cell_arc.clone()).await;
