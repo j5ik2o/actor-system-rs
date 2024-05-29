@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 
 use crate::core::actor::actor_context::ActorContext;
+use crate::core::actor::actor_path::ActorPath;
+use crate::core::actor::actor_system::ActorSystem;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -47,4 +49,27 @@ pub trait AnyActor: Debug + Send + Sync {
 
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
+}
+
+#[async_trait::async_trait]
+pub trait AnyActorRef: Debug + PartialEq {
+  fn path(&self) -> &ActorPath;
+  async fn tell_any(&self, system: &ActorSystem, message: AnyMessage);
+}
+
+#[async_trait::async_trait]
+pub trait SysTell: AnyActorRef {
+  async fn sys_tell(&self, system: &ActorSystem, message: SystemMessage);
+  async fn start(&mut self, system: &ActorSystem) {
+    self.sys_tell(system, SystemMessage::Create).await;
+  }
+  async fn stop(&mut self, system: &ActorSystem) {
+    self.sys_tell(system, SystemMessage::Terminate).await;
+  }
+  async fn suspend(&mut self, system: &ActorSystem) {
+    self.sys_tell(system, SystemMessage::Suspend).await;
+  }
+  async fn resume(&mut self, system: &ActorSystem) {
+    self.sys_tell(system, SystemMessage::Resume).await;
+  }
 }

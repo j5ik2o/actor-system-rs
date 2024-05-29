@@ -32,15 +32,23 @@ impl ActorSystem {
     actors.get(path).cloned()
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
-    let actor_ref = ActorRef::new(path.clone());
-    let mut actors = self.actors.lock().await;
-    let mut mailbox = Mailbox::new().await;
+  async fn make_actor<A: Actor + 'static>(system: Arc<ActorSystem>, mailbox: &mut Mailbox, actor_ref: ActorRef<A::M>, props: Props<A>) -> Arc<Mutex<Box<dyn AnyActor>>> {
     let actor = props.create();
-    let actor_cell = ActorCell::new(actor, mailbox.clone(), actor_ref.clone(), Arc::new(self.clone()));
+    let actor_cell = ActorCell::new(actor, mailbox.clone(), actor_ref, system);
     let actor_cell_arc = Arc::new(Mutex::new(Box::new(actor_cell) as Box<dyn AnyActor>));
     mailbox.set_actor(actor_cell_arc.clone()).await;
-    actors.insert(path.clone(), actor_cell_arc.clone());
+    actor_cell_arc
+  }
+
+  pub async fn actor_of<A: Actor + 'static>(&self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
+    let actor_ref = ActorRef::new(path.clone());
+    let mut mailbox = Mailbox::new().await;
+
+    let actor_cell_arc = Self::make_actor(Arc::new(self.clone()), &mut mailbox, actor_ref.clone(), props).await;
+
+    let mut actors_mg = self.actors.lock().await;
+    actors_mg.insert(path.clone(), actor_cell_arc.clone());
+
     actor_cell_arc.lock().await.start().await.unwrap();
     self.dispatcher.register(mailbox).await;
     actor_ref

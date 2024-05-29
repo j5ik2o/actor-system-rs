@@ -2,10 +2,9 @@ use std::env;
 
 use actor_system_rs::core::actor::actor_context::ActorContext;
 use actor_system_rs::core::actor::actor_path::ActorPath;
-use actor_system_rs::core::actor::actor_ref::AnyActorRef;
 use actor_system_rs::core::actor::actor_system::ActorSystem;
 use actor_system_rs::core::actor::props::Props;
-use actor_system_rs::core::actor::Actor;
+use actor_system_rs::core::actor::{Actor, AnyActorRef};
 use actor_system_rs::core::dispatch::message::Message;
 use actor_system_rs::core::util::element::Element;
 

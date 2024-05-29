@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rand::{thread_rng, RngCore};
+use rand::{RngCore, thread_rng};
 
+use crate::core::actor::{Actor, AnyActor, AnyActorRef};
 use crate::core::actor::actor_context::ActorContext;
-use crate::core::actor::actor_ref::{ActorRef, AnyActorRef};
+use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::actor_system::ActorSystem;
-use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::any_message::AnyMessage;
-use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
+use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
 
 pub const UNDEFINED_UID: u32 = 0;
