@@ -1,15 +1,19 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rand::{RngCore, thread_rng};
+use rand::{thread_rng, RngCore};
+use tokio::sync::Mutex;
 
-use crate::core::actor::{Actor, AnyActor, AnyActorRef};
 use crate::core::actor::actor_context::ActorContext;
-use crate::core::actor::actor_ref::ActorRef;
+use crate::core::actor::actor_path::ActorPath;
+use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystem;
+use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
 use crate::core::dispatch::any_message::AnyMessage;
-use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
+use crate::core::dispatch::mailbox::Mailbox;
+use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
 
 pub const UNDEFINED_UID: u32 = 0;
@@ -35,13 +39,14 @@ pub fn split_name_and_uid(name: &str) -> (&str, u32) {
     }
   }
 }
-
 #[derive(Debug)]
 pub struct ActorCell<A: Actor> {
   actor: A,
   mailbox: Mailbox,
   self_ref: ActorRef<A::M>,
   system: Arc<ActorSystem>,
+  parent_ref: Option<UntypedActorRef>,
+  children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
 }
 
 impl<A: Actor> ActorCell<A> {
@@ -51,38 +56,79 @@ impl<A: Actor> ActorCell<A> {
       mailbox,
       self_ref,
       system,
+      parent_ref: None,
+      children: Arc::new(Mutex::new(HashMap::new())),
     }
   }
 }
 
 #[async_trait]
 impl<A: Actor + 'static> AnyActor for ActorCell<A> {
-  fn path(&self) -> String {
-    self.self_ref.path().to_string()
+  fn path(&self) -> &ActorPath {
+    &self.self_ref.path()
   }
 
-  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
+  async fn set_parent(&mut self, parent_ref: UntypedActorRef) {
+    self.parent_ref = Some(parent_ref);
+  }
+
+  async fn get_parent(&self) -> Option<UntypedActorRef> {
+    self.parent_ref.clone()
+  }
+
+  async fn add_child(&self, child_cell: AnyActorArc) {
+    let mut children = self.children.lock().await;
+    let child_cell_lock = child_cell.lock().await;
+    let path = child_cell_lock.path();
+    children.insert(path.clone(), child_cell.clone());
+  }
+
+  async fn get_children(&self) -> Vec<AnyActorArc> {
+    let children = self.children.lock().await;
+    children.values().cloned().collect()
+  }
+
+  async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
     self.mailbox.enqueue_message(message).await
   }
 
-  async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
+  async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
     self.mailbox.enqueue_system_message(system_message).await
   }
 
-  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>> {
+  async fn start(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Create).await
   }
 
-  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>> {
+  async fn stop(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Terminate).await
   }
 
-  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>> {
+  async fn suspend(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Suspend).await
   }
 
-  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>> {
+  async fn resume(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Resume).await
+  }
+
+  async fn child_terminated(&mut self, child: UntypedActorRef) {
+    log::debug!("child_terminated: {:?}", child);
+    let mut children_lock = self.children.lock().await;
+    children_lock.remove(child.path());
+
+    if children_lock.is_empty() {
+      let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
+      self.actor.around_post_stop(ctx).await;
+      if let Some(parent_ref) = self.get_parent().await {
+        parent_ref
+          .tell_any(
+            &self.system,
+            AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
+          )
+          .await;
+      }
+    }
   }
 
   async fn invoke(&mut self, mut message: AnyMessage) {
@@ -112,7 +158,23 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
         log::debug!("Terminate: {}", self.path());
         let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
         self.mailbox.become_closed().await;
-        self.actor.around_post_stop(ctx).await;
+        let children_lock = self.children.lock().await;
+        if !children_lock.is_empty() {
+          for (_, child) in children_lock.iter() {
+            let mut child = child.lock().await;
+            child.stop().await.unwrap();
+          }
+        } else {
+          self.actor.around_post_stop(ctx).await;
+          if let Some(parent_ref) = self.get_parent().await {
+            parent_ref
+              .tell_any(
+                &self.system,
+                AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
+              )
+              .await;
+          }
+        }
       }
     }
   }

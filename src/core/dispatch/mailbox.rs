@@ -10,6 +10,7 @@ use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
+use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::{
   create_queue, Queue, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
   QueueWriteBehavior, QueueWriteFactoryBehavior, QueueWriter,
@@ -292,9 +293,21 @@ impl Mailbox {
       }
 
       match self.dequeue_message().await {
-        Ok(Some(message)) => {
-          let actor_arc = self.get_actor_arc().await.unwrap();
-          actor_arc.lock().await.invoke(message).await;
+        Ok(Some(mut message)) => {
+          if message.is_type::<AutoReceivedMessage>() {
+            let msg = message.take::<AutoReceivedMessage>().unwrap();
+            match msg {
+              AutoReceivedMessage::Terminated(child) => {
+                log::debug!("Mailbox process message: {:?}", message);
+                let actor_arc = self.get_actor_arc().await.unwrap();
+                actor_arc.lock().await.child_terminated(child).await;
+              }
+              _ => {}
+            }
+          } else {
+            let actor_arc = self.get_actor_arc().await.unwrap();
+            actor_arc.lock().await.invoke(message).await;
+          }
           self.process_system_mailbox().await;
           let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
           let now = SystemTime::now();

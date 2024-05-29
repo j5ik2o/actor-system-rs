@@ -7,13 +7,13 @@ use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActor};
+use crate::core::actor::{Actor, AnyActor, AnyActorArc};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Debug, Clone)]
 pub struct ActorSystem {
-  actors: Arc<Mutex<HashMap<ActorPath, Arc<Mutex<Box<dyn AnyActor>>>>>>,
+  actors: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
   dispatcher: Dispatcher,
   termination_notify: Arc<Notify>,
 }
@@ -32,7 +32,12 @@ impl ActorSystem {
     actors.get(path).cloned()
   }
 
-  async fn make_actor<A: Actor + 'static>(system: Arc<ActorSystem>, mailbox: &mut Mailbox, actor_ref: ActorRef<A::M>, props: Props<A>) -> Arc<Mutex<Box<dyn AnyActor>>> {
+  async fn make_actor<A: Actor + 'static>(
+    system: Arc<ActorSystem>,
+    mailbox: &mut Mailbox,
+    actor_ref: ActorRef<A::M>,
+    props: Props<A>,
+  ) -> AnyActorArc {
     let actor = props.create();
     let actor_cell = ActorCell::new(actor, mailbox.clone(), actor_ref, system);
     let actor_cell_arc = Arc::new(Mutex::new(Box::new(actor_cell) as Box<dyn AnyActor>));
@@ -61,6 +66,10 @@ impl ActorSystem {
   pub async fn terminate(&self) {
     self.dispatcher.stop().await;
     self.termination_notify.notify_waiters();
+  }
+
+  pub(crate) async fn register(&self, mailbox: Mailbox) {
+    self.dispatcher.register(mailbox).await;
   }
 
   pub(crate) async fn dispatch(&self) {

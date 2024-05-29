@@ -67,6 +67,10 @@ impl<M: Message> ActorRef<M> {
     Self { path, p: PhantomData }
   }
 
+  pub fn to_untyped(&self) -> UntypedActorRef {
+    UntypedActorRef::new(self.path.clone())
+  }
+
   pub async fn tell(&self, system: &ActorSystem, message: M) {
     self.tell_any(system, AnyMessage::new(message)).await;
   }

@@ -1,9 +1,12 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use async_trait::async_trait;
+use tokio::sync::Mutex;
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
+use crate::core::actor::actor_ref::UntypedActorRef;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -37,19 +40,27 @@ pub trait Actor: Debug + Send + Sync {
 
 #[async_trait]
 pub trait AnyActor: Debug + Send + Sync {
-  fn path(&self) -> String;
+  fn path(&self) -> &ActorPath;
 
-  async fn send_message(&mut self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
-  async fn send_system_message(&mut self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
+  async fn set_parent(&mut self, parent_ref: UntypedActorRef);
+  async fn get_parent(&self) -> Option<UntypedActorRef>;
+  async fn add_child(&self, child_cell: AnyActorArc);
+  async fn get_children(&self) -> Vec<AnyActorArc>;
+  async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
+  async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
 
-  async fn start(&mut self) -> Result<(), QueueError<SystemMessage>>;
-  async fn stop(&mut self) -> Result<(), QueueError<SystemMessage>>;
-  async fn suspend(&mut self) -> Result<(), QueueError<SystemMessage>>;
-  async fn resume(&mut self) -> Result<(), QueueError<SystemMessage>>;
+  async fn start(&self) -> Result<(), QueueError<SystemMessage>>;
+  async fn stop(&self) -> Result<(), QueueError<SystemMessage>>;
+  async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
+  async fn resume(&self) -> Result<(), QueueError<SystemMessage>>;
+
+  async fn child_terminated(&mut self, child: UntypedActorRef);
 
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
 }
+
+pub type AnyActorArc = Arc<Mutex<Box<dyn AnyActor>>>;
 
 #[async_trait::async_trait]
 pub trait AnyActorRef: Debug + PartialEq {
