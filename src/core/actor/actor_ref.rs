@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{AnyActorRef, SysTell};
+use crate::core::actor::actor_cells::ActorCells;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -33,11 +34,11 @@ impl AnyActorRef for UntypedActorRef {
     &self.path
   }
 
-  async fn tell_any(&self, system: &ActorSystem, message: AnyMessage) {
-    if let Some(actor_arc) = system.find_actor(&self.path).await {
+  async fn tell_any(&self, actor_cells: ActorCells, message: AnyMessage) {
+    if let Some(actor_arc) = actor_cells.find_actor(&self.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
-      system.dispatch().await;
+      actor_cells.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -46,10 +47,10 @@ impl AnyActorRef for UntypedActorRef {
 
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
-  async fn sys_tell(&self, system: &ActorSystem, message: SystemMessage) {
-    if let Some(actor_arc) = system.find_actor(&self.path).await {
+  async fn sys_tell(&self, actor_cells: ActorCells, message: SystemMessage) {
+    if let Some(actor_arc) =  actor_cells.find_actor(&self.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
-      system.dispatch().await;
+      actor_cells.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -59,20 +60,21 @@ impl SysTell for UntypedActorRef {
 #[derive(Debug, Clone)]
 pub struct ActorRef<M: Message> {
   path: ActorPath,
+  actor_cells: ActorCells,
   p: PhantomData<M>,
 }
 
 impl<M: Message> ActorRef<M> {
-  pub fn new(path: ActorPath) -> Self {
-    Self { path, p: PhantomData }
+  pub fn new(actor_cells: ActorCells, path: ActorPath) -> Self {
+    Self { actor_cells, path, p: PhantomData }
   }
 
   pub fn to_untyped(&self) -> UntypedActorRef {
     UntypedActorRef::new(self.path.clone())
   }
 
-  pub async fn tell(&self, system: &ActorSystem, message: M) {
-    self.tell_any(system, AnyMessage::new(message)).await;
+  pub async fn tell(&self, actor_cells: ActorCells, message: M) {
+    self.tell_any(actor_cells, AnyMessage::new(message)).await;
   }
 }
 
@@ -88,11 +90,11 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
     &self.path
   }
 
-  async fn tell_any(&self, system: &ActorSystem, message: AnyMessage) {
-    if let Some(actor_arc) = system.find_actor(&self.path).await {
+  async fn tell_any(&self, actor_cells: ActorCells, message: AnyMessage) {
+    if let Some(actor_arc) = actor_cells.find_actor(&self.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
-      system.dispatch().await;
+      actor_cells.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -101,10 +103,10 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 
 #[async_trait::async_trait]
 impl<M: Message> SysTell for ActorRef<M> {
-  async fn sys_tell(&self, system: &ActorSystem, message: SystemMessage) {
-    if let Some(actor_arc) = system.find_actor(&self.path).await {
+  async fn sys_tell(&self, actor_cells: ActorCells, message: SystemMessage) {
+    if let Some(actor_arc) = actor_cells.find_actor(&self.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
-      system.dispatch().await;
+      actor_cells.dispatch().await;
     } else {
       panic!("actor not found");
     }

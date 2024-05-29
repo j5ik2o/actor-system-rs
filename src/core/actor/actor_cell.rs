@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
 use tokio::sync::Mutex;
 
-use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
+use crate::core::actor::actor_cells::ActorCells;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -44,18 +44,16 @@ pub struct ActorCell<A: Actor> {
   actor: A,
   mailbox: Mailbox,
   self_ref: ActorRef<A::M>,
-  system: Arc<ActorSystem>,
   parent_ref: Option<UntypedActorRef>,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
 }
 
 impl<A: Actor> ActorCell<A> {
-  pub fn new(actor: A, mailbox: Mailbox, self_ref: ActorRef<A::M>, system: Arc<ActorSystem>) -> Self {
+  pub fn new(actor: A, mailbox: Mailbox, self_ref: ActorRef<A::M>) -> Self {
     Self {
       actor,
       mailbox,
       self_ref,
-      system,
       parent_ref: None,
       children: Arc::new(Mutex::new(HashMap::new())),
     }
@@ -112,18 +110,17 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     self.send_system_message(SystemMessage::Resume).await
   }
 
-  async fn child_terminated(&mut self, child: UntypedActorRef) {
+  async fn child_terminated(&mut self, actor_cells: ActorCells, child: UntypedActorRef) {
     log::debug!("child_terminated: {:?}", child);
     let mut children_lock = self.children.lock().await;
     children_lock.remove(child.path());
 
     if children_lock.is_empty() {
-      let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
-      self.actor.around_post_stop(ctx).await;
+      self.actor.around_post_stop(actor_cells.clone()).await;
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
           .tell_any(
-            &self.system,
+            actor_cells,
             AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
           )
           .await;
@@ -131,20 +128,18 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     }
   }
 
-  async fn invoke(&mut self, mut message: AnyMessage) {
+  async fn invoke(&mut self, actor_cells: ActorCells, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
-      let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
-      self.actor.receive(ctx, message).await;
+      self.actor.receive(actor_cells, message).await;
     }
   }
 
-  async fn system_invoke(&mut self, system_message: SystemMessage) {
+  async fn system_invoke(&mut self, actor_cells: ActorCells, system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
     match system_message {
       SystemMessage::Create => {
         log::debug!("Create: {}", self.path());
-        let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
-        self.actor.around_pre_start(ctx).await;
+        self.actor.around_pre_start(actor_cells).await;
       }
       SystemMessage::Suspend => {
         log::debug!("Suspend: {}", self.path());
@@ -156,7 +151,6 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       }
       SystemMessage::Terminate => {
         log::debug!("Terminate: {}", self.path());
-        let ctx = ActorContext::new(self.self_ref.clone(), self.system.clone());
         self.mailbox.become_closed().await;
         let children_lock = self.children.lock().await;
         if !children_lock.is_empty() {
@@ -165,11 +159,11 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
             child.stop().await.unwrap();
           }
         } else {
-          self.actor.around_post_stop(ctx).await;
+          self.actor.around_post_stop(actor_cells.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
               .tell_any(
-                &self.system,
+                actor_cells,
                 AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
               )
               .await;

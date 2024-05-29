@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
+use crate::core::actor::actor_cells::ActorCells;
 
 use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
@@ -245,21 +246,21 @@ impl Mailbox {
     inner.actor = Arc::new(Some(actor));
   }
 
-  pub(crate) async fn execute(&mut self) {
+  pub(crate) async fn execute(&mut self, actor_cells: ActorCells) {
     if !self.is_closed().await {
-      self.process_system_mailbox().await;
-      self.process_mailbox().await;
+      self.process_system_mailbox(actor_cells.clone()).await;
+      self.process_mailbox(actor_cells).await;
     }
     self.set_as_idle().await;
   }
 
-  async fn process_system_mailbox(&mut self) {
+  async fn process_system_mailbox(&mut self, actor_cells: ActorCells) {
     if self.has_system_messages().await && !self.is_closed().await {
       match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
-            actor_arc.lock().await.system_invoke(msg).await;
+            actor_arc.lock().await.system_invoke(actor_cells, msg).await;
           }
         }
         _ => {}
@@ -267,7 +268,7 @@ impl Mailbox {
     }
   }
 
-  async fn process_mailbox(&mut self) {
+  async fn process_mailbox(&mut self, actor_cells: ActorCells) {
     let (left, deadline_ns) = {
       let inner = self.inner.lock().await;
       let throughput = inner.throughput;
@@ -282,10 +283,10 @@ impl Mailbox {
       };
       (l, d)
     };
-    self.process_mailbox_with(left, deadline_ns).await
+    self.process_mailbox_with(actor_cells, left, deadline_ns).await
   }
 
-  async fn process_mailbox_with(&mut self, mut left: usize, deadline_ns: u128) {
+  async fn process_mailbox_with(&mut self, actor_cells: ActorCells, mut left: usize, deadline_ns: u128) {
     while left > 0 {
       let is_should_process_message = self.should_process_message().await;
       if !is_should_process_message {
@@ -300,15 +301,15 @@ impl Mailbox {
               AutoReceivedMessage::Terminated(child) => {
                 log::debug!("Mailbox process message: {:?}", message);
                 let actor_arc = self.get_actor_arc().await.unwrap();
-                actor_arc.lock().await.child_terminated(child).await;
+                actor_arc.lock().await.child_terminated(actor_cells.clone(), child).await;
               }
               _ => {}
             }
           } else {
             let actor_arc = self.get_actor_arc().await.unwrap();
-            actor_arc.lock().await.invoke(message).await;
+            actor_arc.lock().await.invoke(actor_cells.clone(), message).await;
           }
-          self.process_system_mailbox().await;
+          self.process_system_mailbox(actor_cells.clone()).await;
           let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
           let now = SystemTime::now();
           if is_throughput_deadline_time_defined && (now.elapsed().unwrap().as_nanos()) >= deadline_ns {

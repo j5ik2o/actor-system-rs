@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
+use crate::core::actor::actor_cells::ActorCells;
 
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -21,11 +22,12 @@ impl Dispatcher {
     mailboxes.push(mailbox);
   }
 
-  pub async fn run(&self) {
+  pub async fn run(&self, actor_cells: ActorCells) {
     let mailboxes = self.mailboxes.lock().await.clone();
     for mut mailbox in mailboxes {
+      let actor_cells = actor_cells.clone();
       tokio::spawn(async move {
-        mailbox.execute().await;
+        mailbox.execute(actor_cells).await;
       });
     }
   }
