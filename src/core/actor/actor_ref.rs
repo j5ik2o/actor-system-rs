@@ -3,10 +3,10 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 
+use crate::core::actor::actor_cells::ActorCells;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{AnyActorRef, SysTell};
-use crate::core::actor::actor_cells::ActorCells;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -48,7 +48,7 @@ impl AnyActorRef for UntypedActorRef {
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, actor_cells: ActorCells, message: SystemMessage) {
-    if let Some(actor_arc) =  actor_cells.find_actor(&self.path).await {
+    if let Some(actor_arc) = actor_cells.find_actor(&self.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
       actor_cells.dispatch().await;
     } else {
@@ -66,7 +66,11 @@ pub struct ActorRef<M: Message> {
 
 impl<M: Message> ActorRef<M> {
   pub fn new(actor_cells: ActorCells, path: ActorPath) -> Self {
-    Self { actor_cells, path, p: PhantomData }
+    Self {
+      actor_cells,
+      path,
+      p: PhantomData,
+    }
   }
 
   pub fn to_untyped(&self) -> UntypedActorRef {

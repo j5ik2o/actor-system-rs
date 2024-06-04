@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex, Notify};
 
-use crate::core::actor::{Actor, AnyActor};
 use crate::core::actor::actor_cells::ActorCells;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
+use crate::core::actor::{Actor, AnyActor};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -20,7 +20,7 @@ pub struct ActorSystem {
 
 impl ActorSystem {
   pub fn new() -> Self {
-    let dispatcher =  Dispatcher::new();
+    let dispatcher = Dispatcher::new();
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
     Self {

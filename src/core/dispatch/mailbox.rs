@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use crate::core::actor::actor_cells::ActorCells;
 use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
-use crate::core::actor::actor_cells::ActorCells;
 
 use crate::core::actor::AnyActor;
 use crate::core::dispatch::any_message::AnyMessage;
@@ -260,7 +260,9 @@ impl Mailbox {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
-            actor_arc.lock().await.system_invoke(actor_cells, msg).await;
+            let mut actor_mg = actor_arc.lock().await;
+            actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
+            actor_mg.system_invoke(msg).await;
           }
         }
         _ => {}
@@ -301,13 +303,19 @@ impl Mailbox {
               AutoReceivedMessage::Terminated(child) => {
                 log::debug!("Mailbox process message: {:?}", message);
                 let actor_arc = self.get_actor_arc().await.unwrap();
-                actor_arc.lock().await.child_terminated(actor_cells.clone(), child).await;
+                let mut actor_mg = actor_arc.lock().await;
+                // TODO
+                actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
+                actor_mg.child_terminated(child).await;
               }
               _ => {}
             }
           } else {
             let actor_arc = self.get_actor_arc().await.unwrap();
-            actor_arc.lock().await.invoke(actor_cells.clone(), message).await;
+            let mut actor_mg = actor_arc.lock().await;
+            // TODO: set_actor_cells
+            actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
+            actor_mg.invoke(message).await;
           }
           self.process_system_mailbox(actor_cells.clone()).await;
           let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
