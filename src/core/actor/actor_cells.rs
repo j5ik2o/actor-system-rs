@@ -76,7 +76,7 @@ impl ActorCells {
 
   pub async fn top_actor_of<B: Actor + 'static>(
     &self,
-    dispatcher: &mut Dispatcher,
+    dispatcher: &Dispatcher,
     path: ActorPath,
     props: Props<B>,
   ) -> ActorRef<B::M> {
