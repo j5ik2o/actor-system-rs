@@ -58,10 +58,9 @@ async fn main() {
   let user_path = ActorPath::from_string("actor://actor_system/system/root/user/actor1");
   let props = Props::new(|| MyActor::new(42));
   let actor_ref = system.actor_of(user_path, props).await;
-  actor_ref
-    .tell(MyMessage { value: 42 })
-    .await;
-  sleep(Duration::from_secs(1));
-  system.terminate().await;
+  tokio::spawn(async move {
+    sleep(Duration::from_secs(1));
+    actor_ref.tell(MyMessage { value: 42 }).await;
+  });
   system.when_terminated().await;
 }
