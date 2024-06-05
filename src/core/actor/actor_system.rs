@@ -23,6 +23,7 @@ pub struct ActorSystem {
   termination_notify: Arc<Notify>,
 }
 
+#[derive(Debug, Clone)]
 pub struct ActorSystemRef {
   inner: Weak<Mutex<ActorSystemInner>>,
   termination_notify: Arc<Notify>,
@@ -35,18 +36,22 @@ impl ActorSystemRef {
 }
 
 impl ActorSystem {
-  pub fn new() -> Self {
+  pub async fn new() -> Self {
     let dispatcher = Dispatcher::new();
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
-    Self {
+    let myself = Self {
       inner: Arc::new(Mutex::new(
         ActorSystemInner{
           actor_cells: ActorCells::new(actor_path, dispatcher.clone()),
           dispatcher }
       )),
       termination_notify: Arc::new(Notify::new()),
-    }
+    };
+
+    myself.inner.lock().await.actor_cells.set_actor_system_ref(myself.actor_system_ref()).await;
+
+    myself
   }
 
   pub fn actor_system_ref(&self) -> ActorSystemRef {

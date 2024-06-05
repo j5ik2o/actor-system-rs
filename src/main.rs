@@ -45,7 +45,7 @@ impl Actor for MyActor {
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");
     }
-    // ctx.terminate_system().await;
+    ctx.terminate_system().await;
   }
 }
 
@@ -54,7 +54,7 @@ async fn main() {
   let _ = env::set_var("RUST_LOG", "debug");
   let _ = env_logger::init();
 
-  let mut system = ActorSystem::new();
+  let mut system = ActorSystem::new().await;
   let user_path = ActorPath::from_string("actor://actor_system/system/root/user/actor1");
   let props = Props::new(|| MyActor::new(42));
   let actor_ref = system.actor_of(user_path, props).await;

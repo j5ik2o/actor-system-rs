@@ -8,6 +8,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc};
+use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -16,6 +17,7 @@ pub struct ActorCellsInner {
   self_path: ActorPath,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
   dispatcher: Dispatcher,
+  actor_system_ref: Option<ActorSystemRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,8 +43,21 @@ impl ActorCells {
         self_path,
         children: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
+        actor_system_ref: None
       })),
     }
+  }
+
+  pub async fn set_actor_system_ref(&self, actor_system_ref: ActorSystemRef) {
+    let mut inner_lock = self.inner.lock().await;
+    inner_lock.actor_system_ref = Some(actor_system_ref);
+  }
+
+  pub async fn terminate_system(&self) {
+    let inner_lock = self.inner.lock().await;
+    let actor_system_ref = inner_lock.actor_system_ref.as_ref().unwrap();
+    let actor_system = actor_system_ref.upgrade().unwrap();
+    actor_system.terminate().await;
   }
 
   pub async fn self_path(&self) -> ActorPath {
