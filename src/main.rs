@@ -59,7 +59,7 @@ async fn main() {
   let props = Props::new(|| MyActor::new(42));
   let actor_ref = system.actor_of(user_path, props).await;
   actor_ref
-    .tell(system.actor_cells.clone(), MyMessage { value: 42 })
+    .tell(MyMessage { value: 42 })
     .await;
   sleep(Duration::from_secs(1));
   system.terminate().await;

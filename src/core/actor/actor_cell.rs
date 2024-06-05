@@ -107,7 +107,6 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
           .tell_any(
-            actor_cells,
             AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
           )
           .await;
@@ -152,7 +151,6 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
               .tell_any(
-                actor_cells,
                 AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
               )
               .await;

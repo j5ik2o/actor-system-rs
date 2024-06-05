@@ -80,7 +80,7 @@ impl ActorCells {
     path: ActorPath,
     props: Props<B>,
   ) -> ActorRef<B::M> {
-    let actor_ref = ActorRef::new(self.clone(), path.clone());
+    let actor_ref = ActorRef::new(self.actor_cells_ref(), path.clone());
     let mut mailbox = Mailbox::new().await;
 
     let actor_cell_arc = Self::make_actor(&mut mailbox, actor_ref.clone(), props).await;
@@ -103,7 +103,7 @@ impl ActorCells {
   ) -> ActorRef<B::M> {
     let inner_lock = self.inner.lock().await;
     let path = ActorPath::of_child(inner_lock.self_path.clone(), name, 0);
-    let actor_ref = ActorRef::new(self.clone(), path);
+    let actor_ref = ActorRef::new(self.actor_cells_ref(), path);
     let mut mailbox = Mailbox::new().await;
 
     let actor = props.create();

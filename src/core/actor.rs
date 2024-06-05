@@ -65,22 +65,22 @@ pub type AnyActorArc = Arc<Mutex<Box<dyn AnyActor>>>;
 #[async_trait::async_trait]
 pub trait AnyActorRef: Debug + PartialEq {
   fn path(&self) -> &ActorPath;
-  async fn tell_any(&self, actor_cells: ActorCells, message: AnyMessage);
+  async fn tell_any(&self, message: AnyMessage);
 }
 
 #[async_trait::async_trait]
 pub trait SysTell: AnyActorRef {
-  async fn sys_tell(&self, actor_cells: ActorCells, message: SystemMessage);
-  async fn start(&mut self, actor_cells: ActorCells) {
-    self.sys_tell(actor_cells, SystemMessage::Create).await;
+  async fn sys_tell(&self, message: SystemMessage);
+  async fn start(&mut self) {
+    self.sys_tell(SystemMessage::Create).await;
   }
-  async fn stop(&mut self, actor_cells: ActorCells) {
-    self.sys_tell(actor_cells, SystemMessage::Terminate).await;
+  async fn stop(&mut self) {
+    self.sys_tell(SystemMessage::Terminate).await;
   }
-  async fn suspend(&mut self, actor_cells: ActorCells) {
-    self.sys_tell(actor_cells, SystemMessage::Suspend).await;
+  async fn suspend(&mut self) {
+    self.sys_tell(SystemMessage::Suspend).await;
   }
-  async fn resume(&mut self, actor_cells: ActorCells) {
-    self.sys_tell(actor_cells, SystemMessage::Resume).await;
+  async fn resume(&mut self) {
+    self.sys_tell(SystemMessage::Resume).await;
   }
 }
