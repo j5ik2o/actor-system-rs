@@ -99,6 +99,6 @@ impl ActorSystem {
 
   pub(crate) async fn dispatch(&self) {
     let inner_lock = self.inner.lock().await;
-    inner_lock.dispatcher.run(inner_lock.actor_cells.clone()).await;
+    inner_lock.dispatcher.run().await;
   }
 }

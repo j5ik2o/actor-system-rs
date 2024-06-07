@@ -142,6 +142,6 @@ impl ActorCells {
 
   pub(crate) async fn dispatch(&self) {
     let inner_lock = self.inner.lock().await;
-    inner_lock.dispatcher.run(self.clone()).await;
+    inner_lock.dispatcher.run().await;
   }
 }
