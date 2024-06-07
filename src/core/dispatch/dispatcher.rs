@@ -22,12 +22,11 @@ impl Dispatcher {
     mailboxes.push(mailbox);
   }
 
-  pub async fn run(&self, actor_cells: ActorCells) {
+  pub async fn run(&self) {
     let mailboxes = self.mailboxes.lock().await.clone();
     for mut mailbox in mailboxes {
-      let actor_cells = actor_cells.clone();
       tokio::spawn(async move {
-        mailbox.execute(actor_cells).await;
+        mailbox.execute().await;
       });
     }
   }

@@ -253,22 +253,21 @@ impl Mailbox {
     actor_mg.set_actor_cells_ref(self.actor_cells_ref.clone());
   }
 
-  pub(crate) async fn execute(&mut self, actor_cells: ActorCells) {
+  pub(crate) async fn execute(&mut self) {
     if !self.is_closed().await {
-      self.process_system_mailbox(actor_cells.clone()).await;
-      self.process_mailbox(actor_cells).await;
+      self.process_system_mailbox().await;
+      self.process_mailbox().await;
     }
     self.set_as_idle().await;
   }
 
-  async fn process_system_mailbox(&mut self, actor_cells: ActorCells) {
+  async fn process_system_mailbox(&mut self) {
     if self.has_system_messages().await && !self.is_closed().await {
       match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
           let actor_opt_arc = self.get_actor().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
             let mut actor_mg = actor_arc.lock().await;
-            actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
             actor_mg.system_invoke(msg).await;
           }
         }
@@ -277,7 +276,7 @@ impl Mailbox {
     }
   }
 
-  async fn process_mailbox(&mut self, actor_cells: ActorCells) {
+  async fn process_mailbox(&mut self) {
     let (left, deadline_ns) = {
       let inner = self.inner.lock().await;
       let throughput = inner.throughput;
@@ -292,10 +291,10 @@ impl Mailbox {
       };
       (l, d)
     };
-    self.process_mailbox_with(actor_cells, left, deadline_ns).await
+    self.process_mailbox_with(left, deadline_ns).await
   }
 
-  async fn process_mailbox_with(&mut self, actor_cells: ActorCells, mut left: usize, deadline_ns: u128) {
+  async fn process_mailbox_with(&mut self, mut left: usize, deadline_ns: u128) {
     while left > 0 {
       let is_should_process_message = self.should_process_message().await;
       if !is_should_process_message {
@@ -311,8 +310,6 @@ impl Mailbox {
                 log::debug!("Mailbox process message: {:?}", message);
                 let actor_arc = self.get_actor_arc().await.unwrap();
                 let mut actor_mg = actor_arc.lock().await;
-                // // TODO
-                // actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
                 actor_mg.child_terminated(child).await;
               }
               _ => {}
@@ -320,11 +317,9 @@ impl Mailbox {
           } else {
             let actor_arc = self.get_actor_arc().await.unwrap();
             let mut actor_mg = actor_arc.lock().await;
-            // // TODO: set_actor_cells
-            // actor_mg.set_actor_cells_ref(actor_cells.clone().actor_cells_ref());
             actor_mg.invoke(message).await;
           }
-          self.process_system_mailbox(actor_cells.clone()).await;
+          self.process_system_mailbox().await;
           let is_throughput_deadline_time_defined = self.is_throughput_deadline_time_defined().await;
           let now = SystemTime::now();
           if is_throughput_deadline_time_defined && (now.elapsed().unwrap().as_nanos()) >= deadline_ns {
