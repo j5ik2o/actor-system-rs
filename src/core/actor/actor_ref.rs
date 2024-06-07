@@ -24,7 +24,9 @@ pub struct UntypedActorRef {
 
 impl UntypedActorRef {
   pub fn new(path: ActorPath, actor_cells_ref: ActorCellsRef) -> Self {
-    Self { inner: ActorRefInner{ path, actor_cells_ref } }
+    Self {
+      inner: ActorRefInner { path, actor_cells_ref },
+    }
   }
 }
 
@@ -54,7 +56,7 @@ impl AnyActorRef for UntypedActorRef {
 
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
-  async fn sys_tell(&self,  message: SystemMessage) {
+  async fn sys_tell(&self, message: SystemMessage) {
     let actor_cells = self.inner.actor_cells_ref.upgrade().await.unwrap();
     if let Some(actor_arc) = actor_cells.find_actor(&self.inner.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
@@ -74,8 +76,7 @@ pub struct ActorRef<M: Message> {
 impl<M: Message> ActorRef<M> {
   pub fn new(actor_cells_ref: ActorCellsRef, path: ActorPath) -> Self {
     Self {
-      inner: ActorRefInner{ actor_cells_ref,
-      path },
+      inner: ActorRefInner { actor_cells_ref, path },
       p: PhantomData,
     }
   }

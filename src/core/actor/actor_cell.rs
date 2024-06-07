@@ -106,9 +106,9 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       self.actor.around_post_stop(actor_cells.clone()).await;
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
-          .tell_any(
-            AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
-          )
+          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+            self.self_ref.to_untyped(),
+          )))
           .await;
       }
     }
@@ -150,9 +150,9 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
           self.actor.around_post_stop(actor_cells.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
-              .tell_any(
-                AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
-              )
+              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+                self.self_ref.to_untyped(),
+              )))
               .await;
           }
         }

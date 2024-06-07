@@ -6,9 +6,9 @@ use tokio::sync::Mutex;
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc};
-use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -43,7 +43,7 @@ impl ActorCells {
         self_path,
         children: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
-        actor_system_ref: None
+        actor_system_ref: None,
       })),
     }
   }
@@ -96,7 +96,7 @@ impl ActorCells {
     props: Props<B>,
   ) -> ActorRef<B::M> {
     let actor_ref = ActorRef::new(self.actor_cells_ref(), path.clone());
-    let mut mailbox = Mailbox::new().await;
+    let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
 
     let actor_cell_arc = Self::make_actor(&mut mailbox, actor_ref.clone(), props).await;
 
@@ -119,7 +119,7 @@ impl ActorCells {
     let inner_lock = self.inner.lock().await;
     let path = ActorPath::of_child(inner_lock.self_path.clone(), name, 0);
     let actor_ref = ActorRef::new(self.actor_cells_ref(), path);
-    let mut mailbox = Mailbox::new().await;
+    let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
 
     let actor = props.create();
     let child_cell = ActorCell::new(actor, mailbox.clone(), actor_ref.clone());

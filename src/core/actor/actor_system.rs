@@ -31,7 +31,10 @@ pub struct ActorSystemRef {
 
 impl ActorSystemRef {
   pub fn upgrade(&self) -> Option<ActorSystem> {
-    self.inner.upgrade().map(|inner| ActorSystem { inner, termination_notify: self.termination_notify.clone() })
+    self.inner.upgrade().map(|inner| ActorSystem {
+      inner,
+      termination_notify: self.termination_notify.clone(),
+    })
   }
 }
 
@@ -41,15 +44,20 @@ impl ActorSystem {
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
     let myself = Self {
-      inner: Arc::new(Mutex::new(
-        ActorSystemInner{
-          actor_cells: ActorCells::new(actor_path, dispatcher.clone()),
-          dispatcher }
-      )),
+      inner: Arc::new(Mutex::new(ActorSystemInner {
+        actor_cells: ActorCells::new(actor_path, dispatcher.clone()),
+        dispatcher,
+      })),
       termination_notify: Arc::new(Notify::new()),
     };
 
-    myself.inner.lock().await.actor_cells.set_actor_system_ref(myself.actor_system_ref()).await;
+    myself
+      .inner
+      .lock()
+      .await
+      .actor_cells
+      .set_actor_system_ref(myself.actor_system_ref())
+      .await;
 
     myself
   }
@@ -68,7 +76,10 @@ impl ActorSystem {
 
   pub async fn actor_of<A: Actor + 'static>(&mut self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
     let mut inner_lock = self.inner.lock().await;
-    inner_lock.actor_cells.top_actor_of(&inner_lock.dispatcher, path, props).await
+    inner_lock
+      .actor_cells
+      .top_actor_of(&inner_lock.dispatcher, path, props)
+      .await
   }
 
   pub async fn when_terminated(&self) {
