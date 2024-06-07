@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
 use crate::core::actor::actor_cells::ActorCells;
+use tokio::sync::Mutex;
 
 use crate::core::dispatch::mailbox::Mailbox;
 

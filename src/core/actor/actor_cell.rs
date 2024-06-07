@@ -1,21 +1,21 @@
 use std::collections::HashMap;
+use std::rc::Weak;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
 use tokio::sync::Mutex;
 
+use crate::core::actor::actor_cells::{ActorCells, ActorCellsRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
-use crate::core::actor::actor_cells::ActorCells;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
-
 
 #[derive(Debug)]
 pub struct ActorCell<A: Actor> {
@@ -24,6 +24,7 @@ pub struct ActorCell<A: Actor> {
   self_ref: ActorRef<A::M>,
   parent_ref: Option<UntypedActorRef>,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
+  actor_cells_opt: Option<ActorCellsRef>,
 }
 
 impl<A: Actor> ActorCell<A> {
@@ -34,6 +35,7 @@ impl<A: Actor> ActorCell<A> {
       self_ref,
       parent_ref: None,
       children: Arc::new(Mutex::new(HashMap::new())),
+      actor_cells_opt: None,
     }
   }
 }
@@ -46,6 +48,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
 
   async fn set_parent(&mut self, parent_ref: UntypedActorRef) {
     self.parent_ref = Some(parent_ref);
+  }
+
+  fn set_actor_cells_ref(&mut self, actor_cells: ActorCellsRef) {
+    self.actor_cells_opt = Some(actor_cells);
   }
 
   async fn get_parent(&self) -> Option<UntypedActorRef> {
@@ -88,32 +94,36 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     self.send_system_message(SystemMessage::Resume).await
   }
 
-  async fn child_terminated(&mut self, actor_cells: ActorCells, child: UntypedActorRef) {
+  async fn child_terminated(&mut self, child: UntypedActorRef) {
     log::debug!("child_terminated: {:?}", child);
     let mut children_lock = self.children.lock().await;
     children_lock.remove(child.path());
 
     if children_lock.is_empty() {
+      let actor_cells_ref = self.actor_cells_opt.as_ref().unwrap().clone();
+      let actor_cells = actor_cells_ref.upgrade().await.unwrap();
+
       self.actor.around_post_stop(actor_cells.clone()).await;
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
-          .tell_any(
-            actor_cells,
-            AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
-          )
+          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+            self.self_ref.to_untyped(),
+          )))
           .await;
       }
     }
   }
 
-  async fn invoke(&mut self, actor_cells: ActorCells, mut message: AnyMessage) {
+  async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
+      let actor_cells = self.actor_cells_opt.as_ref().unwrap().clone().upgrade().await.unwrap();
       self.actor.receive(actor_cells, message).await;
     }
   }
 
-  async fn system_invoke(&mut self, actor_cells: ActorCells, system_message: SystemMessage) {
+  async fn system_invoke(&mut self, system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
+    let actor_cells = self.actor_cells_opt.as_ref().unwrap().clone().upgrade().await.unwrap();
     match system_message {
       SystemMessage::Create => {
         log::debug!("Create: {}", self.path());
@@ -140,10 +150,9 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
           self.actor.around_post_stop(actor_cells.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
-              .tell_any(
-                actor_cells,
-                AnyMessage::new(AutoReceivedMessage::Terminated(self.self_ref.to_untyped())),
-              )
+              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+                self.self_ref.to_untyped(),
+              )))
               .await;
           }
         }
