@@ -2,7 +2,7 @@ use std::env;
 use std::thread::sleep;
 use std::time::Duration;
 
-use actor_system_rs::core::actor::actor_cells::ActorCells;
+use actor_system_rs::core::actor::actor_context::ActorContext;
 use actor_system_rs::core::actor::actor_path::ActorPath;
 use actor_system_rs::core::actor::actor_system::ActorSystem;
 use actor_system_rs::core::actor::props::Props;
@@ -36,11 +36,11 @@ impl MyActor {
 impl Actor for MyActor {
   type M = MyMessage;
 
-  async fn pre_start(&mut self, ctx: ActorCells) {
+  async fn pre_start(&mut self, ctx: ActorContext) {
     log::debug!("pre_start: {}", ctx.self_path().await);
   }
 
-  async fn receive(&mut self, ctx: ActorCells, message: Self::M) {
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");

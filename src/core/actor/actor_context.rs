@@ -13,7 +13,7 @@ use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Debug, Clone)]
-pub struct ActorCellsInner {
+pub struct ActorContextInner {
   self_path: ActorPath,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
   dispatcher: Dispatcher,
@@ -21,25 +21,25 @@ pub struct ActorCellsInner {
 }
 
 #[derive(Debug, Clone)]
-pub struct ActorCells {
-  inner: Arc<Mutex<ActorCellsInner>>,
+pub struct ActorContext {
+  inner: Arc<Mutex<ActorContextInner>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ActorCellsRef {
-  inner: Weak<Mutex<ActorCellsInner>>,
+pub struct ActorContextRef {
+  inner: Weak<Mutex<ActorContextInner>>,
 }
 
-impl ActorCellsRef {
-  pub async fn upgrade(&self) -> Option<ActorCells> {
-    self.inner.upgrade().map(|inner| ActorCells { inner })
+impl ActorContextRef {
+  pub async fn upgrade(&self) -> Option<ActorContext> {
+    self.inner.upgrade().map(|inner| ActorContext { inner })
   }
 }
 
-impl ActorCells {
+impl ActorContext {
   pub fn new(self_path: ActorPath, dispatcher: Dispatcher) -> Self {
     Self {
-      inner: Arc::new(Mutex::new(ActorCellsInner {
+      inner: Arc::new(Mutex::new(ActorContextInner {
         self_path,
         children: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
@@ -65,8 +65,8 @@ impl ActorCells {
     inner_lock.self_path.clone()
   }
 
-  pub fn actor_cells_ref(&self) -> ActorCellsRef {
-    ActorCellsRef {
+  pub fn actor_context_ref(&self) -> ActorContextRef {
+    ActorContextRef {
       inner: Arc::downgrade(&self.inner),
     }
   }
@@ -90,8 +90,8 @@ impl ActorCells {
   }
 
   pub async fn top_actor_of<B: Actor + 'static>(&self, path: ActorPath, props: Props<B>) -> ActorRef<B::M> {
-    let actor_ref = ActorRef::new(self.actor_cells_ref(), path.clone());
-    let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
+    let actor_ref = ActorRef::new(self.actor_context_ref(), path.clone());
+    let mut mailbox = Mailbox::new(self.actor_context_ref()).await;
 
     let actor_cell_arc = Self::make_actor(&mut mailbox, actor_ref.clone(), props).await;
 
@@ -123,8 +123,8 @@ impl ActorCells {
       self_path = inner_lock.self_path.clone();
     }
     let path = ActorPath::of_child(self_path, name, 0);
-    let actor_ref = ActorRef::new(self.actor_cells_ref(), path);
-    let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
+    let actor_ref = ActorRef::new(self.actor_context_ref(), path);
+    let mut mailbox = Mailbox::new(self.actor_context_ref()).await;
 
     let actor = props.create();
     let child_cell = ActorCell::new(actor, mailbox.clone(), actor_ref.clone());

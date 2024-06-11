@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 
-use crate::core::actor::actor_cells::{ActorCells, ActorCellsRef};
+use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{AnyActorRef, SysTell};
@@ -14,7 +14,7 @@ use crate::core::dispatch::message::Message;
 #[derive(Debug, Clone)]
 struct ActorRefInner {
   path: ActorPath,
-  actor_cells_ref: ActorCellsRef,
+  actor_context_ref: ActorContextRef,
 }
 
 #[derive(Debug, Clone)]
@@ -23,9 +23,9 @@ pub struct UntypedActorRef {
 }
 
 impl UntypedActorRef {
-  pub fn new(path: ActorPath, actor_cells_ref: ActorCellsRef) -> Self {
+  pub fn new(path: ActorPath, actor_context_ref: ActorContextRef) -> Self {
     Self {
-      inner: ActorRefInner { path, actor_cells_ref },
+      inner: ActorRefInner { path, actor_context_ref },
     }
   }
 }
@@ -43,11 +43,11 @@ impl AnyActorRef for UntypedActorRef {
   }
 
   async fn tell_any(&self, message: AnyMessage) {
-    let actor_cells = self.inner.actor_cells_ref.upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_cells.find_actor(&self.inner.path).await {
+    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
-      actor_cells.dispatch().await;
+      actor_context.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -57,10 +57,10 @@ impl AnyActorRef for UntypedActorRef {
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
-    let actor_cells = self.inner.actor_cells_ref.upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_cells.find_actor(&self.inner.path).await {
+    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
-      actor_cells.dispatch().await;
+      actor_context.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -74,15 +74,15 @@ pub struct ActorRef<M: Message> {
 }
 
 impl<M: Message> ActorRef<M> {
-  pub fn new(actor_cells_ref: ActorCellsRef, path: ActorPath) -> Self {
+  pub fn new(actor_context_ref: ActorContextRef, path: ActorPath) -> Self {
     Self {
-      inner: ActorRefInner { actor_cells_ref, path },
+      inner: ActorRefInner { actor_context_ref, path },
       p: PhantomData,
     }
   }
 
   pub fn to_untyped(&self) -> UntypedActorRef {
-    UntypedActorRef::new(self.inner.path.clone(), self.inner.actor_cells_ref.clone())
+    UntypedActorRef::new(self.inner.path.clone(), self.inner.actor_context_ref.clone())
   }
 
   pub async fn tell(&self, message: M) {
@@ -103,11 +103,11 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
   }
 
   async fn tell_any(&self, message: AnyMessage) {
-    let actor_cells = self.inner.actor_cells_ref.upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_cells.find_actor(&self.inner.path).await {
+    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
-      actor_cells.dispatch().await;
+      actor_context.dispatch().await;
     } else {
       panic!("actor not found");
     }
@@ -117,10 +117,10 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 #[async_trait::async_trait]
 impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
-    let actor_cells = self.inner.actor_cells_ref.upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_cells.find_actor(&self.inner.path).await {
+    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
-      actor_cells.dispatch().await;
+      actor_context.dispatch().await;
     } else {
       panic!("actor not found");
     }

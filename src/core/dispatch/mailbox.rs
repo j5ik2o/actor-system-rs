@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::core::actor::actor_cells::{ActorCells, ActorCellsRef};
+use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -34,11 +34,11 @@ pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
   message_queue: Queue<AnyMessage>,
   system_message_queue: Queue<SystemMessage>,
-  actor_cells_ref: ActorCellsRef,
+  actor_cells_ref: ActorContextRef,
 }
 
 impl Mailbox {
-  pub async fn new(actor_cells_ref: ActorCellsRef) -> Self {
+  pub async fn new(actor_cells_ref: ActorContextRef) -> Self {
     let message_queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     let system_message_queue = create_queue::<SystemMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     Self {
@@ -250,7 +250,7 @@ impl Mailbox {
     }
     let actor_arc_opt = self.get_actor_arc().await;
     let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
-    actor_mg.set_actor_cells_ref(self.actor_cells_ref.clone());
+    actor_mg.set_actor_context_ref(self.actor_cells_ref.clone());
   }
 
   pub(crate) async fn execute(&mut self) {
