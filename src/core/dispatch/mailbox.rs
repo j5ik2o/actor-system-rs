@@ -34,11 +34,10 @@ pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
   message_queue: Queue<AnyMessage>,
   system_message_queue: Queue<SystemMessage>,
-  actor_cells_ref: ActorContextRef,
 }
 
 impl Mailbox {
-  pub async fn new(actor_cells_ref: ActorContextRef) -> Self {
+  pub async fn new() -> Self {
     let message_queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     let system_message_queue = create_queue::<SystemMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     Self {
@@ -51,7 +50,6 @@ impl Mailbox {
       })),
       message_queue,
       system_message_queue,
-      actor_cells_ref,
     }
   }
 
@@ -248,9 +246,9 @@ impl Mailbox {
       let mut inner = self.inner.lock().await;
       inner.actor = Arc::new(Some(actor));
     }
-    let actor_arc_opt = self.get_actor_arc().await;
-    let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
-    actor_mg.set_actor_context_ref(self.actor_cells_ref.clone());
+    // let actor_arc_opt = self.get_actor_arc().await;
+    // let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
+    // actor_mg.set_actor_context_ref(self.actor_cells_ref.clone());
   }
 
   pub(crate) async fn execute(&mut self) {
