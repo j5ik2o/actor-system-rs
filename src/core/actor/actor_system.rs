@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 
 use tokio::sync::{Mutex, Notify};
 
-use crate::core::actor::actor_cells::ActorCells;
+use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::address::Address;
@@ -13,7 +13,7 @@ use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Debug, Clone)]
 struct ActorSystemInner {
-  actor_cells: ActorCells,
+  actor_context: ActorContext,
   dispatcher: Dispatcher,
 }
 
@@ -45,7 +45,7 @@ impl ActorSystem {
     let actor_path = ActorPath::of_root(address);
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_cells: ActorCells::new(actor_path, dispatcher.clone()),
+        actor_context: ActorContext::new(None, actor_path, dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),
@@ -55,7 +55,7 @@ impl ActorSystem {
       .inner
       .lock()
       .await
-      .actor_cells
+      .actor_context
       .set_actor_system_ref(myself.actor_system_ref())
       .await;
 
@@ -71,15 +71,12 @@ impl ActorSystem {
 
   pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
     let inner_lock = self.inner.lock().await;
-    inner_lock.actor_cells.find_actor(path).await
+    inner_lock.actor_context.find_actor(path).await
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&mut self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
-    let mut inner_lock = self.inner.lock().await;
-    inner_lock
-      .actor_cells
-      .top_actor_of(&inner_lock.dispatcher, path, props)
-      .await
+  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> ActorRef<A::M> {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.actor_context.actor_of(props, name).await
   }
 
   pub async fn when_terminated(&self) {

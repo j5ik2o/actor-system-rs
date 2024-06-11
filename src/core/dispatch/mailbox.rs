@@ -3,8 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::core::actor::actor_cells::{ActorCells, ActorCellsRef};
-use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::core::actor::AnyActor;
@@ -14,7 +12,7 @@ use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::{
   create_queue, Queue, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
-  QueueWriteBehavior, QueueWriteFactoryBehavior, QueueWriter,
+  QueueWriteBehavior, QueueWriteFactoryBehavior,
 };
 
 pub mod mailbox_status;
@@ -34,11 +32,10 @@ pub struct Mailbox {
   inner: Arc<Mutex<MailboxInner>>,
   message_queue: Queue<AnyMessage>,
   system_message_queue: Queue<SystemMessage>,
-  actor_cells_ref: ActorCellsRef,
 }
 
 impl Mailbox {
-  pub async fn new(actor_cells_ref: ActorCellsRef) -> Self {
+  pub async fn new() -> Self {
     let message_queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     let system_message_queue = create_queue::<SystemMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;
     Self {
@@ -51,7 +48,6 @@ impl Mailbox {
       })),
       message_queue,
       system_message_queue,
-      actor_cells_ref,
     }
   }
 
@@ -248,9 +244,9 @@ impl Mailbox {
       let mut inner = self.inner.lock().await;
       inner.actor = Arc::new(Some(actor));
     }
-    let actor_arc_opt = self.get_actor_arc().await;
-    let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
-    actor_mg.set_actor_cells_ref(self.actor_cells_ref.clone());
+    // let actor_arc_opt = self.get_actor_arc().await;
+    // let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
+    // actor_mg.set_actor_context_ref(self.actor_cells_ref.clone());
   }
 
   pub(crate) async fn execute(&mut self) {
