@@ -89,23 +89,24 @@ impl ActorCells {
     actor_cell_arc
   }
 
-  pub async fn top_actor_of<B: Actor + 'static>(
-    &self,
-    dispatcher: &Dispatcher,
-    path: ActorPath,
-    props: Props<B>,
-  ) -> ActorRef<B::M> {
+  pub async fn top_actor_of<B: Actor + 'static>(&self, path: ActorPath, props: Props<B>) -> ActorRef<B::M> {
     let actor_ref = ActorRef::new(self.actor_cells_ref(), path.clone());
     let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
 
     let actor_cell_arc = Self::make_actor(&mut mailbox, actor_ref.clone(), props).await;
 
-    let inner_lock = self.inner.lock().await;
-    let mut actors_mg = inner_lock.children.lock().await;
-    actors_mg.insert(path.clone(), actor_cell_arc.clone());
+    {
+      let inner_lock = self.inner.lock().await;
+      let mut actors_mg = inner_lock.children.lock().await;
+      actors_mg.insert(path.clone(), actor_cell_arc.clone());
+    }
 
-    actor_cell_arc.lock().await.start().await.unwrap();
-    dispatcher.register(mailbox).await;
+    {
+      let lock = actor_cell_arc.lock().await;
+      lock.start().await.unwrap();
+    }
+
+    self.register(mailbox).await;
     actor_ref
   }
 
@@ -116,8 +117,12 @@ impl ActorCells {
     props: Props<B>,
     name: &str,
   ) -> ActorRef<B::M> {
-    let inner_lock = self.inner.lock().await;
-    let path = ActorPath::of_child(inner_lock.self_path.clone(), name, 0);
+    let self_path;
+    {
+      let inner_lock = self.inner.lock().await;
+      self_path = inner_lock.self_path.clone();
+    }
+    let path = ActorPath::of_child(self_path, name, 0);
     let actor_ref = ActorRef::new(self.actor_cells_ref(), path);
     let mut mailbox = Mailbox::new(self.actor_cells_ref()).await;
 

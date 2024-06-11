@@ -76,10 +76,7 @@ impl ActorSystem {
 
   pub async fn actor_of<A: Actor + 'static>(&mut self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
     let mut inner_lock = self.inner.lock().await;
-    inner_lock
-      .actor_cells
-      .top_actor_of(&inner_lock.dispatcher, path, props)
-      .await
+    inner_lock.actor_cells.top_actor_of(path, props).await
   }
 
   pub async fn when_terminated(&self) {
