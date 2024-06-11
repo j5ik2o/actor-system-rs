@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::ActorRef;
 use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc};
@@ -14,8 +14,10 @@ use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Debug, Clone)]
 pub struct ActorContextInner {
+  parent_context_ref: Option<ActorContextRef>,
   self_path: ActorPath,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
+  child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
   actor_system_ref: Option<ActorSystemRef>,
 }
@@ -37,11 +39,13 @@ impl ActorContextRef {
 }
 
 impl ActorContext {
-  pub fn new(self_path: ActorPath, dispatcher: Dispatcher) -> Self {
+  pub fn new(parent_context_ref: Option<ActorContextRef>, self_path: ActorPath, dispatcher: Dispatcher) -> Self {
     Self {
       inner: Arc::new(Mutex::new(ActorContextInner {
+        parent_context_ref,
         self_path,
         children: Arc::new(Mutex::new(HashMap::new())),
+        child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
         actor_system_ref: None,
       })),
@@ -77,8 +81,25 @@ impl ActorContext {
     actors.get(path).cloned()
   }
 
-  pub async fn top_actor_of<B: Actor + 'static>(&self, path: ActorPath, props: Props<B>) -> ActorRef<B::M> {
-    let actor_ref = ActorRef::new(self.actor_context_ref(), path.clone());
+  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> ActorRef<B::M> {
+    let self_path;
+    let dispatcher;
+    let actor_system_ref;
+    {
+      let inner_lock = self.inner.lock().await;
+      self_path = inner_lock.self_path.clone();
+      dispatcher = inner_lock.dispatcher.clone();
+      actor_system_ref = inner_lock.actor_system_ref.as_ref().unwrap().clone();
+    }
+    let actor_path = ActorPath::of_child(self_path, name, 0);
+
+    let actor_context_ref = self.actor_context_ref();
+
+    let child_context = ActorContext::new(Some(actor_context_ref.clone()), actor_path.clone(), dispatcher);
+    child_context.set_actor_system_ref(actor_system_ref.clone()).await;
+    let child_context_ref = child_context.actor_context_ref();
+
+    let actor_ref = ActorRef::new(actor_context_ref.clone(), actor_path.clone());
     let mut mailbox = Mailbox::new().await;
 
     let actor = props.create();
@@ -89,50 +110,19 @@ impl ActorContext {
     {
       let inner_lock = self.inner.lock().await;
       let mut actors_mg = inner_lock.children.lock().await;
-      actors_mg.insert(path.clone(), actor_cell_arc.clone());
+      actors_mg.insert(actor_path.clone(), actor_cell_arc.clone());
+      let mut child_context_mg = inner_lock.child_contexts.lock().await;
+      child_context_mg.insert(actor_path.clone(), child_context.clone());
     }
 
     {
       let mut actor_cell_arc_lock = actor_cell_arc.lock().await;
-      actor_cell_arc_lock.set_actor_context_ref(self.actor_context_ref());
+      actor_cell_arc_lock.set_actor_context_ref(child_context_ref);
       actor_cell_arc_lock.start().await.unwrap();
     }
 
     self.register(mailbox).await;
     actor_ref
-  }
-
-  pub async fn child_actor_of<B: Actor + 'static>(
-    &self,
-    parent_cell_arc: AnyActorArc,
-    props: Props<B>,
-    name: &str,
-  ) -> ActorRef<B::M> {
-    let self_path;
-    {
-      let inner_lock = self.inner.lock().await;
-      self_path = inner_lock.self_path.clone();
-    }
-    let child_path = ActorPath::of_child(self_path, name, 0);
-    let child_actor_ref = ActorRef::new(self.actor_context_ref(), child_path);
-    let mut mailbox = Mailbox::new().await;
-
-    let actor = props.create();
-    let child_cell = ActorCell::new(actor, mailbox.clone(), child_actor_ref.clone());
-    let child_cell_arc = Arc::new(Mutex::new(Box::new(child_cell) as Box<dyn AnyActor>));
-    mailbox.set_actor(child_cell_arc.clone()).await;
-
-    let mut actor_cell_mg = parent_cell_arc.lock().await;
-    actor_cell_mg.add_child(child_cell_arc.clone()).await;
-
-    {
-      let mut actor_cell_arc_lock = child_cell_arc.lock().await;
-      actor_cell_arc_lock.set_actor_context_ref(self.actor_context_ref());
-      actor_cell_arc_lock.start().await.unwrap();
-    }
-
-    self.register(mailbox).await;
-    child_actor_ref
   }
 
   pub(crate) async fn register(&self, mailbox: Mailbox) {

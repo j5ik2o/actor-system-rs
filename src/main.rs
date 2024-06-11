@@ -3,10 +3,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use actor_system_rs::core::actor::actor_context::ActorContext;
-use actor_system_rs::core::actor::actor_path::ActorPath;
 use actor_system_rs::core::actor::actor_system::ActorSystem;
 use actor_system_rs::core::actor::props::Props;
-use actor_system_rs::core::actor::{Actor, AnyActorRef};
+use actor_system_rs::core::actor::Actor;
 use actor_system_rs::core::dispatch::message::Message;
 use actor_system_rs::core::util::element::Element;
 
@@ -55,9 +54,8 @@ async fn main() {
   let _ = env_logger::init();
 
   let mut system = ActorSystem::new().await;
-  let user_path = ActorPath::from_string("actor://actor_system/system/root/user/actor1");
   let props = Props::new(|| MyActor::new(42));
-  let actor_ref = system.actor_of(user_path, props).await;
+  let actor_ref = system.actor_of(props, "actor1").await;
   tokio::spawn(async move {
     sleep(Duration::from_secs(1));
     actor_ref.tell(MyMessage { value: 42 }).await;

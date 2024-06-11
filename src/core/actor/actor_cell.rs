@@ -1,21 +1,19 @@
 use std::collections::HashMap;
-use std::rc::Weak;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
 use tokio::sync::Mutex;
 
-use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
+use crate::core::actor::actor_context::ActorContextRef;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
-use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::message::AutoReceivedMessage;
-use crate::core::util::queue::{QueueError, QueueWriteBehavior, QueueWriter};
+use crate::core::util::queue::QueueError;
 
 #[derive(Debug)]
 pub struct ActorCell<A: Actor> {
@@ -116,14 +114,28 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
 
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
-      let actor_context = self.actor_context_opt.as_ref().unwrap().clone().upgrade().await.unwrap();
+      let actor_context = self
+        .actor_context_opt
+        .as_ref()
+        .unwrap()
+        .clone()
+        .upgrade()
+        .await
+        .unwrap();
       self.actor.receive(actor_context, message).await;
     }
   }
 
   async fn system_invoke(&mut self, system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
-    let actor_context = self.actor_context_opt.as_ref().unwrap().clone().upgrade().await.unwrap();
+    let actor_context = self
+      .actor_context_opt
+      .as_ref()
+      .unwrap()
+      .clone()
+      .upgrade()
+      .await
+      .unwrap();
     match system_message {
       SystemMessage::Create => {
         log::debug!("Create: {}", self.path());
@@ -143,7 +155,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
         let children_lock = self.children.lock().await;
         if !children_lock.is_empty() {
           for (_, child) in children_lock.iter() {
-            let mut child = child.lock().await;
+            let child = child.lock().await;
             child.stop().await.unwrap();
           }
         } else {

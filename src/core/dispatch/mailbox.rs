@@ -3,8 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
-use futures::TryFutureExt;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::core::actor::AnyActor;
@@ -14,7 +12,7 @@ use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::{
   create_queue, Queue, QueueBehavior, QueueError, QueueReadBehavior, QueueReadFactoryBehavior, QueueSize, QueueType,
-  QueueWriteBehavior, QueueWriteFactoryBehavior, QueueWriter,
+  QueueWriteBehavior, QueueWriteFactoryBehavior,
 };
 
 pub mod mailbox_status;

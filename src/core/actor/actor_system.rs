@@ -45,7 +45,7 @@ impl ActorSystem {
     let actor_path = ActorPath::of_root(address);
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(actor_path, dispatcher.clone()),
+        actor_context: ActorContext::new(None, actor_path, dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),
@@ -74,9 +74,9 @@ impl ActorSystem {
     inner_lock.actor_context.find_actor(path).await
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&mut self, path: ActorPath, props: Props<A>) -> ActorRef<A::M> {
-    let mut inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.top_actor_of(path, props).await
+  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> ActorRef<A::M> {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.actor_context.actor_of(props, name).await
   }
 
   pub async fn when_terminated(&self) {

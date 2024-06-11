@@ -1,11 +1,8 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use async_trait::async_trait;
-
-use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
+use crate::core::actor::actor_context::ActorContextRef;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_system::ActorSystem;
 use crate::core::actor::{AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -25,7 +22,10 @@ pub struct UntypedActorRef {
 impl UntypedActorRef {
   pub fn new(path: ActorPath, actor_context_ref: ActorContextRef) -> Self {
     Self {
-      inner: ActorRefInner { path, actor_context_ref },
+      inner: ActorRefInner {
+        path,
+        actor_context_ref,
+      },
     }
   }
 }
@@ -76,7 +76,10 @@ pub struct ActorRef<M: Message> {
 impl<M: Message> ActorRef<M> {
   pub fn new(actor_context_ref: ActorContextRef, path: ActorPath) -> Self {
     Self {
-      inner: ActorRefInner { actor_context_ref, path },
+      inner: ActorRefInner {
+        actor_context_ref,
+        path,
+      },
       p: PhantomData,
     }
   }
