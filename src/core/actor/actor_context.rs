@@ -117,7 +117,7 @@ impl ActorContext {
     }
   }
 
-  pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
+  pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<AnyActorArc> {
     let inner_lock = self.inner.lock().await;
     let actors = inner_lock.children.lock().await;
     actors.get(path).cloned()
