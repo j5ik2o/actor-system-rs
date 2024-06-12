@@ -99,7 +99,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     actor_context.remove_child(child.path()).await;
 
     if actor_context.is_child_empty().await {
-      let actor_context_ref = self.actor_context_opt.as_ref().unwrap().clone();
+      let actor_context_ref = self.get_actor_context_ref();
       let actor_context = actor_context_ref.upgrade().await.unwrap();
 
       self.actor.around_post_stop(actor_context.clone()).await;
@@ -115,46 +115,32 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
 
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
-      let actor_context = self
-        .actor_context_opt
-        .as_ref()
-        .unwrap()
-        .clone()
-        .upgrade()
-        .await
-        .unwrap();
+      let actor_context_ref = self.get_actor_context_ref();
+      let actor_context = actor_context_ref.upgrade().await.unwrap();
       self.actor.receive(actor_context, message).await;
     }
   }
 
   async fn system_invoke(&mut self, system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
-    let actor_context = self
-      .actor_context_opt
-      .as_ref()
-      .unwrap()
-      .clone()
-      .upgrade()
-      .await
-      .unwrap();
+    let actor_context_ref = self.get_actor_context_ref();
+    let actor_context = actor_context_ref.upgrade().await.unwrap();
     match system_message {
       SystemMessage::Create => {
-        log::debug!("Create: {}", self.path());
+        log::debug!("Create: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
         self.actor.around_pre_start(actor_context).await;
       }
       SystemMessage::Suspend => {
-        log::debug!("Suspend: {}", self.path());
+        log::debug!("Suspend: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
         self.mailbox.suspend().await;
       }
       SystemMessage::Resume => {
-        log::debug!("Resume: {}", self.path());
+        log::debug!("Resume: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
         self.mailbox.resume().await;
       }
       SystemMessage::Terminate => {
-        log::debug!("Terminate: {}", self.path());
+        log::debug!("Terminate: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
         self.mailbox.become_closed().await;
-        ;
-
         if !actor_context.is_child_empty().await {
           for child in &actor_context.get_children().await {
             let child = child.lock().await;

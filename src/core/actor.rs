@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
@@ -20,7 +19,7 @@ pub mod actor_system;
 pub mod address;
 pub mod props;
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait Actor: Debug + Send + Sync {
   type M: Message;
 
@@ -32,12 +31,14 @@ pub trait Actor: Debug + Send + Sync {
   async fn around_post_stop(&mut self, ctx: ActorContext) {
     self.post_stop(ctx).await;
   }
-  async fn post_stop(&mut self, ctx: ActorContext) {}
+  async fn post_stop(&mut self, ctx: ActorContext) {
+    log::debug!("post_stop: {:?}", ctx.self_path().await)
+  }
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M);
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait AnyActor: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
   fn path(&self) -> &ActorPath;

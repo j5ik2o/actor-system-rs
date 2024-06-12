@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::ActorRef;
+use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActor, AnyActorArc};
@@ -79,6 +79,11 @@ impl ActorContext {
     let mut children_lock = lock.children.lock().await;
     children_lock.remove(path)
   }
+
+  pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef)  {
+
+  }
+
 
   pub async fn terminate_system(&self) {
     let actor_system_ref = self.get_actor_system_ref().await;

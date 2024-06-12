@@ -5,7 +5,7 @@ use std::time::Duration;
 use actor_system_rs::core::actor::actor_context::ActorContext;
 use actor_system_rs::core::actor::actor_system::ActorSystem;
 use actor_system_rs::core::actor::props::Props;
-use actor_system_rs::core::actor::Actor;
+use actor_system_rs::core::actor::{Actor, SysTell};
 use actor_system_rs::core::dispatch::message::Message;
 use actor_system_rs::core::util::element::Element;
 
@@ -44,6 +44,32 @@ impl Actor for MyActor {
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");
     }
+    let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
+    child.tell(MyMessage{ value: 1 }).await;
+  }
+}
+
+#[derive(Debug)]
+pub struct EchoActor {
+  answer: i32,
+}
+
+impl EchoActor {
+  pub fn new(answer: i32) -> Self {
+    Self { answer }
+  }
+}
+
+#[async_trait::async_trait]
+impl Actor for EchoActor {
+  type M = MyMessage;
+
+  async fn pre_start(&mut self, ctx: ActorContext) {
+    log::debug!("pre_start: {}", ctx.self_path().await);
+  }
+
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
+    log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     ctx.terminate_system().await;
   }
 }
