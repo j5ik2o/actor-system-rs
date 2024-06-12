@@ -74,6 +74,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
   }
 
   async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>> {
+    log::debug!("send_system_message: {:?}", system_message);
     self.mailbox.enqueue_system_message(system_message).await
   }
 

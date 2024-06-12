@@ -60,9 +60,15 @@ impl AnyActorRef for UntypedActorRef {
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
+    log::debug!("sys_tell: {:?}", message);
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
-      actor_arc.lock().await.send_system_message(message).await.unwrap();
+      log::debug!("sys_tell-1: {:?}", message);
+      {
+        let actor_mg = actor_arc.lock().await;
+        actor_mg.send_system_message(message.clone()).await.unwrap();
+      }
+      log::debug!("sys_tell-2: {:?}", message);
       actor_context.dispatch().await;
     } else {
       panic!("actor not found");
@@ -88,7 +94,9 @@ impl<M: Message> ActorRef<M> {
   }
 
   pub fn to_untyped(&self) -> UntypedActorRef {
-    UntypedActorRef::new(self.inner.path.clone(), self.inner.actor_context_ref.clone())
+    let mut result = UntypedActorRef::new(self.inner.path.clone());
+    result.set_actor_context_ref(self.inner.actor_context_ref.as_ref().unwrap().clone());
+    result
   }
 
   pub async fn tell(&self, message: M) {
@@ -125,7 +133,8 @@ impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
-      actor_arc.lock().await.send_system_message(message).await.unwrap();
+      let lock = actor_arc.lock().await;
+      lock.send_system_message(message).await.unwrap();
       actor_context.dispatch().await;
     } else {
       panic!("actor not found");

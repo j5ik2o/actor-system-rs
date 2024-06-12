@@ -43,15 +43,17 @@ impl ActorSystem {
     let dispatcher = Dispatcher::new();
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
-    let actor_ref = UntypedActorRef::new(actor_path, None);
+    let mut actor_ref = UntypedActorRef::new(actor_path);
 
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(None, actor_ref, dispatcher.clone()),
+        actor_context: ActorContext::new(None, actor_ref.clone(), dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),
     };
+
+    actor_ref.set_actor_context_ref(myself.get_actor_context().await.actor_context_ref());
 
     myself.get_actor_context().await
       .set_actor_system_ref(myself.actor_system_ref())
