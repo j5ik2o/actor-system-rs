@@ -44,7 +44,6 @@ pub trait AnyActor: Debug + Send + Sync {
 
   async fn set_parent(&mut self, parent_ref: UntypedActorRef);
   async fn get_parent(&self) -> Option<UntypedActorRef>;
-  async fn add_child(&self, child_cell: AnyActorArc);
   async fn get_children(&self) -> Vec<AnyActorArc>;
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
   async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;

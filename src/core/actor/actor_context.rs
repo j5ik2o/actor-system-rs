@@ -57,9 +57,31 @@ impl ActorContext {
     inner_lock.actor_system_ref = Some(actor_system_ref);
   }
 
-  pub async fn terminate_system(&self) {
+  pub(crate) async fn get_actor_system_ref(&self) -> ActorSystemRef {
     let inner_lock = self.inner.lock().await;
-    let actor_system_ref = inner_lock.actor_system_ref.as_ref().unwrap();
+    inner_lock.actor_system_ref.as_ref().unwrap().clone()
+  }
+
+  pub async fn is_child_empty(&self) -> bool {
+    let lock = self.inner.lock().await;
+    let children_lock = lock.children.lock().await;
+    children_lock.is_empty()
+  }
+
+  pub async fn get_children(&self) -> Vec<AnyActorArc> {
+    let lock = self.inner.lock().await;
+    let children_lock = lock.children.lock().await;
+    children_lock.values().cloned().collect()
+  }
+
+  pub async fn remove_child(&self, path: &ActorPath) -> Option<AnyActorArc> {
+    let lock = self.inner.lock().await;
+    let mut children_lock = lock.children.lock().await;
+    children_lock.remove(path)
+  }
+
+  pub async fn terminate_system(&self) {
+    let actor_system_ref = self.get_actor_system_ref().await;
     let actor_system = actor_system_ref.upgrade().unwrap();
     actor_system.terminate().await;
   }

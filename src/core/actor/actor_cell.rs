@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
 use tokio::sync::Mutex;
 
-use crate::core::actor::actor_context::ActorContextRef;
+use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
@@ -21,7 +21,6 @@ pub struct ActorCell<A: Actor> {
   mailbox: Mailbox,
   self_ref: ActorRef<A::M>,
   parent_ref: Option<UntypedActorRef>,
-  children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
   actor_context_opt: Option<ActorContextRef>,
 }
 
@@ -32,9 +31,18 @@ impl<A: Actor> ActorCell<A> {
       mailbox,
       self_ref,
       parent_ref: None,
-      children: Arc::new(Mutex::new(HashMap::new())),
       actor_context_opt: None,
     }
+  }
+
+  pub(crate) fn get_actor_context_ref(&self) -> ActorContextRef {
+    self.actor_context_opt.as_ref().unwrap().clone()
+  }
+
+  pub(crate) async fn get_actor_context(&self) -> ActorContext {
+    let actor_context_ref = self.get_actor_context_ref();
+    let actor_context = actor_context_ref.upgrade().await.as_ref().unwrap().clone();
+    actor_context
   }
 }
 
@@ -56,16 +64,9 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     self.parent_ref.clone()
   }
 
-  async fn add_child(&self, child_cell: AnyActorArc) {
-    let mut children = self.children.lock().await;
-    let child_cell_lock = child_cell.lock().await;
-    let path = child_cell_lock.path();
-    children.insert(path.clone(), child_cell.clone());
-  }
-
   async fn get_children(&self) -> Vec<AnyActorArc> {
-    let children = self.children.lock().await;
-    children.values().cloned().collect()
+    let actor_context = self.get_actor_context().await;
+    actor_context.get_children().await
   }
 
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {
@@ -94,10 +95,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
 
   async fn child_terminated(&mut self, child: UntypedActorRef) {
     log::debug!("child_terminated: {:?}", child);
-    let mut children_lock = self.children.lock().await;
-    children_lock.remove(child.path());
+    let actor_context = self.get_actor_context().await;
+    actor_context.remove_child(child.path()).await;
 
-    if children_lock.is_empty() {
+    if actor_context.is_child_empty().await {
       let actor_context_ref = self.actor_context_opt.as_ref().unwrap().clone();
       let actor_context = actor_context_ref.upgrade().await.unwrap();
 
@@ -152,9 +153,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       SystemMessage::Terminate => {
         log::debug!("Terminate: {}", self.path());
         self.mailbox.become_closed().await;
-        let children_lock = self.children.lock().await;
-        if !children_lock.is_empty() {
-          for (_, child) in children_lock.iter() {
+        ;
+
+        if !actor_context.is_child_empty().await {
+          for child in &actor_context.get_children().await {
             let child = child.lock().await;
             child.stop().await.unwrap();
           }
