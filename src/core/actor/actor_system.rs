@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::ActorRef;
+use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActor};
@@ -43,23 +43,26 @@ impl ActorSystem {
     let dispatcher = Dispatcher::new();
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
+    let actor_ref = UntypedActorRef::new(actor_path, None);
+
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(None, actor_path, dispatcher.clone()),
+        actor_context: ActorContext::new(None, actor_ref, dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),
     };
 
-    myself
-      .inner
-      .lock()
-      .await
-      .actor_context
+    myself.get_actor_context().await
       .set_actor_system_ref(myself.actor_system_ref())
       .await;
 
     myself
+  }
+
+  pub(crate) async fn get_actor_context(&self) -> ActorContext {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.actor_context.clone()
   }
 
   pub fn actor_system_ref(&self) -> ActorSystemRef {

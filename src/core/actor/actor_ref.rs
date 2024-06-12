@@ -11,7 +11,7 @@ use crate::core::dispatch::message::Message;
 #[derive(Debug, Clone)]
 struct ActorRefInner {
   path: ActorPath,
-  actor_context_ref: ActorContextRef,
+  actor_context_ref: Option<ActorContextRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,13 +20,16 @@ pub struct UntypedActorRef {
 }
 
 impl UntypedActorRef {
-  pub fn new(path: ActorPath, actor_context_ref: ActorContextRef) -> Self {
+  pub fn new(path: ActorPath) -> Self {
     Self {
       inner: ActorRefInner {
         path,
-        actor_context_ref,
+        actor_context_ref: None,
       },
     }
+  }
+  pub fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
+    self.inner.actor_context_ref = Some(actor_context_ref);
   }
 }
 
@@ -43,7 +46,7 @@ impl AnyActorRef for UntypedActorRef {
   }
 
   async fn tell_any(&self, message: AnyMessage) {
-    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
@@ -57,7 +60,7 @@ impl AnyActorRef for UntypedActorRef {
 #[async_trait::async_trait]
 impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
-    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
       actor_context.dispatch().await;
@@ -77,7 +80,7 @@ impl<M: Message> ActorRef<M> {
   pub fn new(actor_context_ref: ActorContextRef, path: ActorPath) -> Self {
     Self {
       inner: ActorRefInner {
-        actor_context_ref,
+        actor_context_ref: Some(actor_context_ref),
         path,
       },
       p: PhantomData,
@@ -106,7 +109,7 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
   }
 
   async fn tell_any(&self, message: AnyMessage) {
-    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
@@ -120,7 +123,7 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 #[async_trait::async_trait]
 impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
-    let actor_context = self.inner.actor_context_ref.upgrade().await.unwrap();
+    let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
     if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
       actor_arc.lock().await.send_system_message(message).await.unwrap();
       actor_context.dispatch().await;

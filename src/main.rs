@@ -46,6 +46,7 @@ impl Actor for MyActor {
     }
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
     child.tell(MyMessage{ value: 1 }).await;
+    ctx.self_ref().await.
   }
 }
 

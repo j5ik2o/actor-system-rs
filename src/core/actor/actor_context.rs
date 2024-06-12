@@ -8,14 +8,14 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActor, AnyActorArc};
+use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Debug, Clone)]
 pub struct ActorContextInner {
   parent_context_ref: Option<ActorContextRef>,
-  self_path: ActorPath,
+  self_ref: UntypedActorRef,
   children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
@@ -39,11 +39,11 @@ impl ActorContextRef {
 }
 
 impl ActorContext {
-  pub fn new(parent_context_ref: Option<ActorContextRef>, self_path: ActorPath, dispatcher: Dispatcher) -> Self {
+  pub fn new(parent_context_ref: Option<ActorContextRef>, self_ref: UntypedActorRef, dispatcher: Dispatcher) -> Self {
     Self {
       inner: Arc::new(Mutex::new(ActorContextInner {
         parent_context_ref,
-        self_path,
+        self_ref,
         children: Arc::new(Mutex::new(HashMap::new())),
         child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
@@ -93,7 +93,12 @@ impl ActorContext {
 
   pub async fn self_path(&self) -> ActorPath {
     let inner_lock = self.inner.lock().await;
-    inner_lock.self_path.clone()
+    inner_lock.self_ref.path().clone()
+  }
+
+  pub async fn self_ref(&self) -> UntypedActorRef {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.self_ref.clone()
   }
 
   pub fn actor_context_ref(&self) -> ActorContextRef {
@@ -114,19 +119,19 @@ impl ActorContext {
     let actor_system_ref;
     {
       let inner_lock = self.inner.lock().await;
-      parent_path = inner_lock.self_path.clone();
+      parent_path = inner_lock.self_ref.path().clone();
       dispatcher = inner_lock.dispatcher.clone();
       actor_system_ref = inner_lock.actor_system_ref.as_ref().unwrap().clone();
     }
-    let child_actor_path = ActorPath::of_child(parent_path, name, 0);
-
     let parent_context_ref = self.actor_context_ref();
+    let child_actor_path = ActorPath::of_child(parent_path, name, 0);
+    let child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
 
-    let child_context = ActorContext::new(Some(parent_context_ref.clone()), child_actor_path.clone(), dispatcher);
+
+    let child_context = ActorContext::new(Some(parent_context_ref.clone()), child_actor_ref.to_untyped(), dispatcher);
     child_context.set_actor_system_ref(actor_system_ref.clone()).await;
     let child_context_ref = child_context.actor_context_ref();
 
-    let child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
     let mut mailbox = Mailbox::new().await;
 
     let child_actor = props.create();
