@@ -71,7 +71,7 @@ impl Actor for EchoActor {
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
-    // ctx.terminate_system().await;
+    ctx.terminate_system().await;
   }
 }
 

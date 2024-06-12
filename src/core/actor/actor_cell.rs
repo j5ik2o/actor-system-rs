@@ -19,18 +19,14 @@ use crate::core::util::queue::QueueError;
 pub struct ActorCell<A: Actor> {
   actor: A,
   mailbox: Mailbox,
-  self_ref: ActorRef<A::M>,
-  parent_ref: Option<UntypedActorRef>,
   actor_context_opt: Option<ActorContextRef>,
 }
 
 impl<A: Actor> ActorCell<A> {
-  pub fn new(actor: A, mailbox: Mailbox, self_ref: ActorRef<A::M>) -> Self {
+  pub fn new(actor: A, mailbox: Mailbox) -> Self {
     Self {
       actor,
       mailbox,
-      self_ref,
-      parent_ref: None,
       actor_context_opt: None,
     }
   }
@@ -48,12 +44,8 @@ impl<A: Actor> ActorCell<A> {
 
 #[async_trait]
 impl<A: Actor + 'static> AnyActor for ActorCell<A> {
-  fn path(&self) -> &ActorPath {
-    &self.self_ref.path()
-  }
-
-  async fn set_parent(&mut self, parent_ref: UntypedActorRef) {
-    self.parent_ref = Some(parent_ref);
+  async fn path(&self) -> ActorPath {
+    self.get_actor_context().await.self_ref().await.path().clone()
   }
 
   fn set_actor_context_ref(&mut self, actor_context: ActorContextRef) {
@@ -61,7 +53,11 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
   }
 
   async fn get_parent(&self) -> Option<UntypedActorRef> {
-    self.parent_ref.clone()
+    let result = self.get_actor_context().await.get_parent_context().await;
+    match result {
+        Some(parent_context) => Some(parent_context.self_ref().await.clone()),
+        None => None,
+    }
   }
 
   async fn get_children(&self) -> Vec<AnyActorArc> {
@@ -107,7 +103,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
           .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-            self.self_ref.to_untyped(),
+            self.get_actor_context().await.self_ref().await
           )))
           .await;
       }
@@ -128,19 +124,19 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     let actor_context = actor_context_ref.upgrade().await.unwrap();
     match system_message {
       SystemMessage::Create => {
-        log::debug!("Create: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
+        log::debug!("Create: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
         self.actor.around_pre_start(actor_context).await;
       }
       SystemMessage::Suspend => {
-        log::debug!("Suspend: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
+        log::debug!("Suspend: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
         self.mailbox.suspend().await;
       }
       SystemMessage::Resume => {
-        log::debug!("Resume: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
+        log::debug!("Resume: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
         self.mailbox.resume().await;
       }
       SystemMessage::Terminate => {
-        log::debug!("Terminate: {}, suspend = {}", self.path(), self.mailbox.is_suspend().await);
+        log::debug!("Terminate: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
         self.mailbox.become_closed().await;
         if !actor_context.is_child_empty().await {
           for child in &actor_context.get_children().await {
@@ -152,7 +148,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
               .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-                self.self_ref.to_untyped(),
+                self.get_actor_context().await.self_ref().await,
               )))
               .await;
           }

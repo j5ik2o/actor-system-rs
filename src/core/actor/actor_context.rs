@@ -62,6 +62,16 @@ impl ActorContext {
     inner_lock.actor_system_ref.as_ref().unwrap().clone()
   }
 
+  pub(crate) async fn get_parent_context_ref(&self) -> Option<ActorContextRef> {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.parent_context_ref.clone()
+  }
+
+  pub(crate) async fn get_parent_context(&self) -> Option<ActorContext> {
+    let result = self.get_parent_context_ref().await;
+    result.as_ref().unwrap().upgrade().await
+  }
+
   pub async fn is_child_empty(&self) -> bool {
     let lock = self.inner.lock().await;
     let children_lock = lock.children.lock().await;
@@ -135,7 +145,7 @@ impl ActorContext {
     let mut mailbox = Mailbox::new().await;
 
     let child_actor = props.create();
-    let child_actor_cell = ActorCell::new(child_actor, mailbox.clone(), child_actor_ref.clone());
+    let child_actor_cell = ActorCell::new(child_actor, mailbox.clone());
     let child_actor_cell_arc = Arc::new(Mutex::new(Box::new(child_actor_cell) as Box<dyn AnyActor>));
     mailbox.set_actor(child_actor_cell_arc.clone()).await;
 

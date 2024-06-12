@@ -41,9 +41,8 @@ pub trait Actor: Debug + Send + Sync {
 #[async_trait::async_trait]
 pub trait AnyActor: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
-  fn path(&self) -> &ActorPath;
+  async fn path(&self) -> ActorPath;
 
-  async fn set_parent(&mut self, parent_ref: UntypedActorRef);
   async fn get_parent(&self) -> Option<UntypedActorRef>;
   async fn get_children(&self) -> Vec<AnyActorArc>;
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;

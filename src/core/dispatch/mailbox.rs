@@ -357,7 +357,7 @@ impl Mailbox {
 
   async fn get_actor_path(&self) -> Option<String> {
     match self.get_actor_arc().await {
-      Some(actor_arc) => Some(actor_arc.lock().await.path().to_string()),
+      Some(actor_arc) => Some(actor_arc.lock().await.path().await.to_string()),
       None => None,
     }
   }
