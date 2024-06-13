@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::{AnyActorRef, SysTell};
+use crate::core::actor::{AnyActorRef, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -11,6 +12,7 @@ use crate::core::dispatch::message::Message;
 #[derive(Debug, Clone)]
 struct ActorRefInner {
   path: ActorPath,
+  actor_cell_writer: Option<AnyActorWriterArc>,
   actor_context_ref: Option<ActorContextRef>,
 }
 
@@ -21,6 +23,10 @@ impl ActorRefInner {
 
   fn path(&self) -> &ActorPath {
     &self.path
+  }
+
+  fn get_actor_cell_writer(&self) -> AnyActorWriterArc {
+    self.actor_cell_writer.as_ref().unwrap().clone()
   }
 
   fn get_actor_context_ref(&self) -> ActorContextRef {
@@ -44,6 +50,7 @@ impl UntypedActorRef {
     Self {
       inner: ActorRefInner {
         path,
+        actor_cell_writer: None,
         actor_context_ref: None,
       },
     }
@@ -51,6 +58,10 @@ impl UntypedActorRef {
 
   pub fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
     self.inner.set_actor_context_ref(actor_context_ref);
+  }
+
+  pub fn set_actor_cell_writer(&mut self, cell_writer: AnyActorWriterArc) {
+    self.inner.actor_cell_writer = Some(cell_writer);
   }
 }
 
@@ -68,15 +79,11 @@ impl AnyActorRef for UntypedActorRef {
 
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.get_actor_context().await;
-    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
-      {
-        let actor_writer_mg = actor_writer_arc.lock().await;
-        actor_writer_mg.send_message(message).await.unwrap();
-      }
-      actor_context.dispatch().await;
-    } else {
-      panic!("actor not found");
+    {
+      let actor_writer_mg = self.inner.get_actor_cell_writer().lock().await;
+      actor_writer_mg.send_message(message).await.unwrap();
     }
+    actor_context.dispatch().await;
   }
 }
 
@@ -85,15 +92,11 @@ impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
     log::debug!("sys_tell: {:?}", message);
     let actor_context = self.inner.get_actor_context().await;
-    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
-      {
-        let actor_writer_arc_mg = actor_writer_arc.lock().await;
-        actor_writer_arc_mg.send_system_message(message.clone()).await.unwrap();
-      }
-      actor_context.dispatch().await;
-    } else {
-      panic!("actor not found");
+    {
+      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      actor_writer_arc_mg.send_system_message(message.clone()).await.unwrap();
     }
+    actor_context.dispatch().await;
   }
 }
 
@@ -107,16 +110,22 @@ impl<M: Message> ActorRef<M> {
   pub fn new(actor_context_ref: ActorContextRef, path: ActorPath) -> Self {
     Self {
       inner: ActorRefInner {
-        actor_context_ref: Some(actor_context_ref),
         path,
+        actor_cell_writer: None,
+        actor_context_ref: Some(actor_context_ref),
       },
       p: PhantomData,
     }
   }
 
+  pub fn set_actor_cell_writer(&mut self, cell_writer: AnyActorWriterArc) {
+    self.inner.actor_cell_writer = Some(cell_writer);
+  }
+
   pub fn to_untyped(&self) -> UntypedActorRef {
     let mut result = UntypedActorRef::new(self.inner.path.clone());
     result.set_actor_context_ref(self.inner.get_actor_context_ref());
+    result.set_actor_cell_writer(self.inner.get_actor_cell_writer());
     result
   }
 
@@ -139,15 +148,11 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.get_actor_context().await;
-    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
-      {
-        let actor_writer_arc_mg = actor_writer_arc.lock().await;
-        actor_writer_arc_mg.send_message(message).await.unwrap();
-      }
-      actor_context.dispatch().await;
-    } else {
-      panic!("actor not found");
+    {
+      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      actor_writer_arc_mg.send_message(message).await.unwrap();
     }
+    actor_context.dispatch().await;
   }
 }
 
@@ -155,14 +160,10 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
     let actor_context = self.inner.get_actor_context().await;
-    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
-      {
-        let actor_writer_arc_mg = actor_writer_arc.lock().await;
-        actor_writer_arc_mg.send_system_message(message).await.unwrap();
-      }
-      actor_context.dispatch().await;
-    } else {
-      panic!("actor not found");
+    {
+      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      actor_writer_arc_mg.send_system_message(message).await.unwrap();
     }
+    actor_context.dispatch().await;
   }
 }

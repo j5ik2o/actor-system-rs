@@ -23,7 +23,7 @@ pub struct ActorContextInner {
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
   actor_system_ref: Option<ActorSystemRef>,
-  terminate_notify: Arc<Condvar>
+  terminate_notify: Arc<Condvar>,
 }
 
 unsafe impl Send for ActorContextInner {}
@@ -137,18 +137,6 @@ impl ActorContext {
     }
   }
 
-  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
-    let inner_lock = self.inner.lock().await;
-    let actors = inner_lock.child_writers.lock().await;
-    actors.get(path).cloned()
-  }
-
-  pub(crate) async fn find_actor_reader(&self, path: &ActorPath) -> Option<AnyActorReaderArc> {
-    let inner_lock = self.inner.lock().await;
-    let actors = inner_lock.child_readers.lock().await;
-    actors.get(path).cloned()
-  }
-
   pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> ActorRef<B::M> {
     let parent_path;
     let dispatcher;
@@ -161,15 +149,7 @@ impl ActorContext {
     }
     let parent_context_ref = self.actor_context_ref();
     let child_actor_path = ActorPath::of_child(parent_path, name, 0);
-    let child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
-
-    let child_context = ActorContext::new(
-      Some(parent_context_ref.clone()),
-      child_actor_ref.to_untyped(),
-      dispatcher,
-    );
-    child_context.set_actor_system_ref(actor_system_ref.clone()).await;
-    let child_context_ref = child_context.actor_context_ref();
+    let mut child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
 
     let mut mailbox = Mailbox::new().await;
 
@@ -180,16 +160,30 @@ impl ActorContext {
     mailbox.set_actor_writer(child_actor_writer_arc.clone()).await;
     mailbox.set_actor_reader(child_actor_reader_arc.clone()).await;
 
+    child_actor_ref.set_actor_cell_writer(child_actor_writer_arc.clone());
+
+    let child_context = ActorContext::new(
+      Some(parent_context_ref.clone()),
+      child_actor_ref.to_untyped(),
+      dispatcher,
+    );
+    child_context.set_actor_system_ref(actor_system_ref.clone()).await;
+
+    let child_context_ref = child_context.actor_context_ref();
     {
       let inner_lock = self.inner.lock().await;
-      let mut children_mg = inner_lock.child_writers.lock().await;
-      children_mg.insert(child_actor_path.clone(), child_actor_writer_arc.clone());
-
-      let mut children_readers_mg = inner_lock.child_readers.lock().await;
-      children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
-
+      {
+        let mut children_mg = inner_lock.child_writers.lock().await;
+        children_mg.insert(child_actor_path.clone(), child_actor_writer_arc.clone());
+      }
+      {
+        let mut children_readers_mg = inner_lock.child_readers.lock().await;
+        children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
+      }
+      {
       let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
       child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
+      }
     }
 
     {

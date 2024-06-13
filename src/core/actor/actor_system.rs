@@ -76,11 +76,6 @@ impl ActorSystem {
     }
   }
 
-  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
-    let inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.find_actor_writer(path).await
-  }
-
   pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> ActorRef<A::M> {
     let inner_lock = self.inner.lock().await;
     inner_lock.actor_context.actor_of(props, name).await
