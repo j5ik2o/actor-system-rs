@@ -8,7 +8,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorReaderArc, AnyActorRef};
+use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -92,10 +92,7 @@ impl ActorContext {
     children_lock.remove(path)
   }
 
-  pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef)  {
-
-  }
-
+  pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {
     let actor_system_ref = self.get_actor_system_ref().await;
@@ -145,8 +142,11 @@ impl ActorContext {
     let child_actor_path = ActorPath::of_child(parent_path, name, 0);
     let child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
 
-
-    let child_context = ActorContext::new(Some(parent_context_ref.clone()), child_actor_ref.to_untyped(), dispatcher);
+    let child_context = ActorContext::new(
+      Some(parent_context_ref.clone()),
+      child_actor_ref.to_untyped(),
+      dispatcher,
+    );
     child_context.set_actor_system_ref(actor_system_ref.clone()).await;
     let child_context_ref = child_context.actor_context_ref();
 

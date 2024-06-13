@@ -52,7 +52,6 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   async fn stop(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn resume(&self) -> Result<(), QueueError<SystemMessage>>;
-
 }
 
 #[async_trait::async_trait]
@@ -72,7 +71,6 @@ pub trait AnyActorRef: Debug + PartialEq {
   fn path(&self) -> &ActorPath;
   async fn tell_any(&self, message: AnyMessage);
 }
-
 
 #[async_trait::async_trait]
 pub trait SysTell: AnyActorRef {

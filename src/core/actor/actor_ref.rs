@@ -15,17 +15,17 @@ struct ActorRefInner {
 }
 
 impl ActorRefInner {
-    fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
-        self.actor_context_ref = Some(actor_context_ref);
-    }
+  fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
+    self.actor_context_ref = Some(actor_context_ref);
+  }
 
-    fn path(&self) -> &ActorPath {
-      &self.path
-    }
+  fn path(&self) -> &ActorPath {
+    &self.path
+  }
 
-    fn get_actor_context_ref(&self) -> ActorContextRef {
-      self.actor_context_ref.as_ref().unwrap().clone()
-    }
+  fn get_actor_context_ref(&self) -> ActorContextRef {
+    self.actor_context_ref.as_ref().unwrap().clone()
+  }
 
   async fn get_actor_context(&self) -> ActorContext {
     let actor_context_ref = self.get_actor_context_ref();
@@ -48,6 +48,7 @@ impl UntypedActorRef {
       },
     }
   }
+
   pub fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
     self.inner.set_actor_context_ref(actor_context_ref);
   }

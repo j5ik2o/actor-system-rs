@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::core::actor::{AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorReaderArc};
+use crate::core::actor::{AnyActorReader, AnyActorReaderArc, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -25,7 +25,7 @@ struct MailboxInner {
   is_throughput_deadline_time_defined: Arc<AtomicBool>,
   throughput_deadline_time: Duration,
   actor: Arc<Option<AnyActorWriterArc>>,
-  actor_reader: Arc<Option<AnyActorReaderArc>>
+  actor_reader: Arc<Option<AnyActorReaderArc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ impl Mailbox {
         is_throughput_deadline_time_defined: Arc::new(AtomicBool::new(false)),
         throughput_deadline_time: Duration::from_millis(100),
         actor: Arc::new(None),
-        actor_reader: Arc::new(None)
+        actor_reader: Arc::new(None),
       })),
       message_queue,
       system_message_queue,
@@ -247,13 +247,13 @@ impl Mailbox {
   }
 
   pub(crate) async fn set_actor_writer(&mut self, actor: Arc<Mutex<Box<dyn AnyActorWriter>>>) {
-      let mut inner = self.inner.lock().await;
-      inner.actor = Arc::new(Some(actor));
+    let mut inner = self.inner.lock().await;
+    inner.actor = Arc::new(Some(actor));
   }
 
   pub(crate) async fn set_actor_reader(&mut self, actor_reader: AnyActorReaderArc) {
-      let mut inner = self.inner.lock().await;
-      inner.actor_reader = Arc::new(Some(actor_reader));
+    let mut inner = self.inner.lock().await;
+    inner.actor_reader = Arc::new(Some(actor_reader));
   }
 
   pub(crate) async fn execute(&mut self) {

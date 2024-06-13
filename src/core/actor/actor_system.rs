@@ -55,7 +55,9 @@ impl ActorSystem {
 
     actor_ref.set_actor_context_ref(myself.get_actor_context().await.actor_context_ref());
 
-    myself.get_actor_context().await
+    myself
+      .get_actor_context()
+      .await
       .set_actor_system_ref(myself.actor_system_ref())
       .await;
 

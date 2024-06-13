@@ -45,7 +45,7 @@ impl Actor for MyActor {
       log::debug!("receive: the answer to life, the universe, and everything");
     }
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
-    child.tell(MyMessage{ value: 1 }).await;
+    child.tell(MyMessage { value: 1 }).await;
     ctx.self_ref().await.stop().await;
   }
 }

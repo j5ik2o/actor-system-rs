@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
-use crate::core::actor::{Actor, AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorRef};
+use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -55,8 +55,8 @@ impl<A: Actor + 'static> AnyActorWriter for ActorCell<A> {
   async fn get_parent(&self) -> Option<UntypedActorRef> {
     let result = self.get_actor_context().await.get_parent_context().await;
     match result {
-        Some(parent_context) => Some(parent_context.self_ref().await.clone()),
-        None => None,
+      Some(parent_context) => Some(parent_context.self_ref().await.clone()),
+      None => None,
     }
   }
 
@@ -89,7 +89,6 @@ impl<A: Actor + 'static> AnyActorWriter for ActorCell<A> {
   async fn resume(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Resume).await
   }
-
 }
 
 #[async_trait]
@@ -110,10 +109,10 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
       self.actor.around_post_stop(actor_context.clone()).await;
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
-            .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-              self.get_actor_context().await.self_ref().await
-            )))
-            .await;
+          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+            self.get_actor_context().await.self_ref().await,
+          )))
+          .await;
       }
     }
   }
@@ -132,19 +131,35 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
     let actor_context = actor_context_ref.upgrade().await.unwrap();
     match system_message {
       SystemMessage::Create => {
-        log::debug!("Create: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
+        log::debug!(
+          "Create: {}, suspend = {}",
+          self.path().await,
+          self.mailbox.is_suspend().await
+        );
         self.actor.around_pre_start(actor_context).await;
       }
       SystemMessage::Suspend => {
-        log::debug!("Suspend: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
+        log::debug!(
+          "Suspend: {}, suspend = {}",
+          self.path().await,
+          self.mailbox.is_suspend().await
+        );
         self.mailbox.suspend().await;
       }
       SystemMessage::Resume => {
-        log::debug!("Resume: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
+        log::debug!(
+          "Resume: {}, suspend = {}",
+          self.path().await,
+          self.mailbox.is_suspend().await
+        );
         self.mailbox.resume().await;
       }
       SystemMessage::Terminate => {
-        log::debug!("Terminate: {}, suspend = {}", self.path().await, self.mailbox.is_suspend().await);
+        log::debug!(
+          "Terminate: {}, suspend = {}",
+          self.path().await,
+          self.mailbox.is_suspend().await
+        );
         self.mailbox.become_closed().await;
         if !actor_context.is_child_empty().await {
           for child in &actor_context.get_children().await {
@@ -155,10 +170,10 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
           self.actor.around_post_stop(actor_context.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
-                .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-                  self.get_actor_context().await.self_ref().await,
-                )))
-                .await;
+              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+                self.get_actor_context().await.self_ref().await,
+              )))
+              .await;
           }
         }
       }
