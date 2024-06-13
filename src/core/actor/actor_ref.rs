@@ -67,9 +67,11 @@ impl AnyActorRef for UntypedActorRef {
 
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.get_actor_context().await;
-    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
-      log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
-      actor_arc.lock().await.send_message(message).await.unwrap();
+    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
+      {
+        let actor_writer_mg = actor_writer_arc.lock().await;
+        actor_writer_mg.send_message(message).await.unwrap();
+      }
       actor_context.dispatch().await;
     } else {
       panic!("actor not found");
@@ -81,11 +83,11 @@ impl AnyActorRef for UntypedActorRef {
 impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
     log::debug!("sys_tell: {:?}", message);
-    let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
+    let actor_context = self.inner.get_actor_context().await;
+    if let Some(actor_writer_arc) = actor_context.find_actor_writer(&self.inner.path).await {
       {
-        let actor_mg = actor_arc.lock().await;
-        actor_mg.send_system_message(message.clone()).await.unwrap();
+        let actor_writer_arc_mg = actor_writer_arc.lock().await;
+        actor_writer_arc_mg.send_system_message(message.clone()).await.unwrap();
       }
       actor_context.dispatch().await;
     } else {
