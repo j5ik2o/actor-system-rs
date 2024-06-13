@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
+use tokio_condvar::Condvar;
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
@@ -20,6 +21,7 @@ pub struct ActorCell<A: Actor> {
   actor: A,
   mailbox: Mailbox,
   actor_context_opt: Option<ActorContextRef>,
+  terminate_notify: Arc<Notify>,
 }
 
 impl<A: Actor> ActorCell<A> {
@@ -28,6 +30,7 @@ impl<A: Actor> ActorCell<A> {
       actor,
       mailbox,
       actor_context_opt: None,
+      terminate_notify: Arc::new(Notify::new()),
     }
   }
 
@@ -163,9 +166,14 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
               )))
               .await;
           }
+          self.terminate_notify.notify_waiters();
         }
       }
     }
+  }
+
+  async fn when_terminated(&self) {
+    self.terminate_notify.notified().await;
   }
 }
 

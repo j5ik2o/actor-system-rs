@@ -80,7 +80,8 @@ impl AnyActorRef for UntypedActorRef {
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.get_actor_context().await;
     {
-      let actor_writer_mg = self.inner.get_actor_cell_writer().lock().await;
+      let actor_cell_writer = self.inner.get_actor_cell_writer();
+      let actor_writer_mg = actor_cell_writer.lock().await;
       actor_writer_mg.send_message(message).await.unwrap();
     }
     actor_context.dispatch().await;
@@ -93,7 +94,8 @@ impl SysTell for UntypedActorRef {
     log::debug!("sys_tell: {:?}", message);
     let actor_context = self.inner.get_actor_context().await;
     {
-      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      let actor_cell_writer = self.inner.get_actor_cell_writer();
+      let actor_writer_arc_mg = actor_cell_writer.lock().await;
       actor_writer_arc_mg.send_system_message(message.clone()).await.unwrap();
     }
     actor_context.dispatch().await;
@@ -149,7 +151,8 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.get_actor_context().await;
     {
-      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      let actor_cell_writer = self.inner.get_actor_cell_writer();
+      let actor_writer_arc_mg = actor_cell_writer.lock().await;
       actor_writer_arc_mg.send_message(message).await.unwrap();
     }
     actor_context.dispatch().await;
@@ -161,7 +164,8 @@ impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
     let actor_context = self.inner.get_actor_context().await;
     {
-      let actor_writer_arc_mg = self.inner.get_actor_cell_writer().lock().await;
+      let actor_cell_writer =  self.inner.get_actor_cell_writer();
+      let actor_writer_arc_mg = actor_cell_writer.lock().await;
       actor_writer_arc_mg.send_system_message(message).await.unwrap();
     }
     actor_context.dispatch().await;
