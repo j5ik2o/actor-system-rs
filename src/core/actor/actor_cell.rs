@@ -109,16 +109,14 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
 
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
-      let actor_context_ref = self.get_actor_context_ref();
-      let actor_context = actor_context_ref.upgrade().await.unwrap();
+      let actor_context = self.get_actor_context().await;
       self.actor.receive(actor_context, message).await;
     }
   }
 
   async fn system_invoke(&mut self, system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
-    let actor_context_ref = self.get_actor_context_ref();
-    let actor_context = actor_context_ref.upgrade().await.unwrap();
+    let actor_context = self.get_actor_context().await;
     match system_message {
       SystemMessage::Create => {
         log::debug!(
