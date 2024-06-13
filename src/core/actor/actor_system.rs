@@ -7,7 +7,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorWriter};
+use crate::core::actor::{Actor, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -76,7 +76,7 @@ impl ActorSystem {
     }
   }
 
-  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActorWriter>>>> {
+  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
     let inner_lock = self.inner.lock().await;
     inner_lock.actor_context.find_actor_writer(path).await
   }

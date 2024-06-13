@@ -236,7 +236,7 @@ impl Mailbox {
     }
   }
 
-  pub(crate) async fn get_actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActorWriter>>>>> {
+  pub(crate) async fn get_actor(&self) -> Arc<Option<AnyActorWriterArc>> {
     let inner = self.inner.lock().await;
     inner.actor.clone()
   }
@@ -246,7 +246,7 @@ impl Mailbox {
     inner.actor_reader.clone()
   }
 
-  pub(crate) async fn set_actor_writer(&mut self, actor: Arc<Mutex<Box<dyn AnyActorWriter>>>) {
+  pub(crate) async fn set_actor_writer(&mut self, actor: AnyActorWriterArc) {
     let mut inner = self.inner.lock().await;
     inner.actor = Arc::new(Some(actor));
   }
@@ -353,7 +353,7 @@ impl Mailbox {
     self.system_message_queue.reader().clean_up().await;
   }
 
-  async fn get_actor_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActorWriter>>>> {
+  async fn get_actor_arc(&self) -> Option<AnyActorWriterArc> {
     let actor_opt_arc = self.get_actor().await;
     if let Some(actor_arc) = actor_opt_arc.as_ref() {
       Some(actor_arc.clone())
@@ -362,7 +362,7 @@ impl Mailbox {
     }
   }
 
-  async fn get_actor_reader_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActorReader>>>> {
+  async fn get_actor_reader_arc(&self) -> Option<AnyActorReaderArc> {
     let actor_opt_arc = self.get_actor_reader().await;
     if let Some(actor_arc) = actor_opt_arc.as_ref() {
       Some(actor_arc.clone())
