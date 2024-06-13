@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::core::actor::AnyActor;
+use crate::core::actor::{AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorReaderArc};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::mailbox_status::MailboxStatus;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -24,7 +24,8 @@ struct MailboxInner {
   throughput: usize,
   is_throughput_deadline_time_defined: Arc<AtomicBool>,
   throughput_deadline_time: Duration,
-  actor: Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>>,
+  actor: Arc<Option<AnyActorWriterArc>>,
+  actor_reader: Arc<Option<AnyActorReaderArc>>
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ impl Mailbox {
         is_throughput_deadline_time_defined: Arc::new(AtomicBool::new(false)),
         throughput_deadline_time: Duration::from_millis(100),
         actor: Arc::new(None),
+        actor_reader: Arc::new(None)
       })),
       message_queue,
       system_message_queue,
@@ -234,19 +236,24 @@ impl Mailbox {
     }
   }
 
-  pub(crate) async fn get_actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActor>>>>> {
+  pub(crate) async fn get_actor(&self) -> Arc<Option<Arc<Mutex<Box<dyn AnyActorWriter>>>>> {
     let inner = self.inner.lock().await;
     inner.actor.clone()
   }
 
-  pub(crate) async fn set_actor(&mut self, actor: Arc<Mutex<Box<dyn AnyActor>>>) {
-    {
+  pub(crate) async fn get_actor_reader(&self) -> Arc<Option<AnyActorReaderArc>> {
+    let inner = self.inner.lock().await;
+    inner.actor_reader.clone()
+  }
+
+  pub(crate) async fn set_actor_writer(&mut self, actor: Arc<Mutex<Box<dyn AnyActorWriter>>>) {
       let mut inner = self.inner.lock().await;
       inner.actor = Arc::new(Some(actor));
-    }
-    // let actor_arc_opt = self.get_actor_arc().await;
-    // let mut actor_mg = actor_arc_opt.as_ref().unwrap().lock().await;
-    // actor_mg.set_actor_context_ref(self.actor_cells_ref.clone());
+  }
+
+  pub(crate) async fn set_actor_reader(&mut self, actor_reader: AnyActorReaderArc) {
+      let mut inner = self.inner.lock().await;
+      inner.actor_reader = Arc::new(Some(actor_reader));
   }
 
   pub(crate) async fn execute(&mut self) {
@@ -261,7 +268,7 @@ impl Mailbox {
     if self.has_system_messages().await && !self.is_closed().await {
       match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
-          let actor_opt_arc = self.get_actor().await;
+          let actor_opt_arc = self.get_actor_reader().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
             let mut actor_mg = actor_arc.lock().await;
             actor_mg.system_invoke(msg).await;
@@ -304,14 +311,14 @@ impl Mailbox {
             match msg {
               AutoReceivedMessage::Terminated(child) => {
                 log::debug!("Mailbox process message: {:?}", message);
-                let actor_arc = self.get_actor_arc().await.unwrap();
+                let actor_arc = self.get_actor_reader_arc().await.unwrap();
                 let mut actor_mg = actor_arc.lock().await;
                 actor_mg.child_terminated(child).await;
               }
               _ => {}
             }
           } else {
-            let actor_arc = self.get_actor_arc().await.unwrap();
+            let actor_arc = self.get_actor_reader_arc().await.unwrap();
             let mut actor_mg = actor_arc.lock().await;
             actor_mg.invoke(message).await;
           }
@@ -346,8 +353,17 @@ impl Mailbox {
     self.system_message_queue.reader().clean_up().await;
   }
 
-  async fn get_actor_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
+  async fn get_actor_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActorWriter>>>> {
     let actor_opt_arc = self.get_actor().await;
+    if let Some(actor_arc) = actor_opt_arc.as_ref() {
+      Some(actor_arc.clone())
+    } else {
+      None
+    }
+  }
+
+  async fn get_actor_reader_arc(&self) -> Option<Arc<Mutex<Box<dyn AnyActorReader>>>> {
+    let actor_opt_arc = self.get_actor_reader().await;
     if let Some(actor_arc) = actor_opt_arc.as_ref() {
       Some(actor_arc.clone())
     } else {
@@ -357,7 +373,7 @@ impl Mailbox {
 
   async fn get_actor_path(&self) -> Option<String> {
     match self.get_actor_arc().await {
-      Some(actor_arc) => Some(actor_arc.lock().await.path().to_string()),
+      Some(actor_arc) => Some(actor_arc.lock().await.path().await.to_string()),
       None => None,
     }
   }

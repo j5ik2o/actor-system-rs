@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
@@ -20,8 +19,8 @@ pub mod actor_system;
 pub mod address;
 pub mod props;
 
-#[async_trait]
-pub trait Actor: Debug + Send + Sync {
+#[async_trait::async_trait]
+pub trait Actor: Debug + Clone + Send + Sync {
   type M: Message;
 
   async fn around_pre_start(&mut self, ctx: ActorContext) {
@@ -32,20 +31,20 @@ pub trait Actor: Debug + Send + Sync {
   async fn around_post_stop(&mut self, ctx: ActorContext) {
     self.post_stop(ctx).await;
   }
-  async fn post_stop(&mut self, ctx: ActorContext) {}
+  async fn post_stop(&mut self, ctx: ActorContext) {
+    log::debug!("post_stop: {:?}", ctx.self_path().await)
+  }
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M);
 }
 
-#[async_trait]
-pub trait AnyActor: Debug + Send + Sync {
+#[async_trait::async_trait]
+pub trait AnyActorWriter: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
-  fn path(&self) -> &ActorPath;
+  async fn path(&self) -> ActorPath;
 
-  async fn set_parent(&mut self, parent_ref: UntypedActorRef);
   async fn get_parent(&self) -> Option<UntypedActorRef>;
-  async fn add_child(&self, child_cell: AnyActorArc);
-  async fn get_children(&self) -> Vec<AnyActorArc>;
+  async fn get_children(&self) -> Vec<AnyActorWriterArc>;
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
   async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
 
@@ -54,19 +53,26 @@ pub trait AnyActor: Debug + Send + Sync {
   async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn resume(&self) -> Result<(), QueueError<SystemMessage>>;
 
+}
+
+#[async_trait::async_trait]
+pub trait AnyActorReader: Debug + Send + Sync {
+  fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
   async fn child_terminated(&mut self, child: UntypedActorRef);
 
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
 }
 
-pub type AnyActorArc = Arc<Mutex<Box<dyn AnyActor>>>;
+pub type AnyActorWriterArc = Arc<Mutex<Box<dyn AnyActorWriter>>>;
+pub type AnyActorReaderArc = Arc<Mutex<Box<dyn AnyActorReader>>>;
 
 #[async_trait::async_trait]
 pub trait AnyActorRef: Debug + PartialEq {
   fn path(&self) -> &ActorPath;
   async fn tell_any(&self, message: AnyMessage);
 }
+
 
 #[async_trait::async_trait]
 pub trait SysTell: AnyActorRef {

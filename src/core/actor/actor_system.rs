@@ -4,10 +4,10 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::ActorRef;
+use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActor};
+use crate::core::actor::{Actor, AnyActorWriter};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -43,23 +43,28 @@ impl ActorSystem {
     let dispatcher = Dispatcher::new();
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
+    let mut actor_ref = UntypedActorRef::new(actor_path);
+
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(None, actor_path, dispatcher.clone()),
+        actor_context: ActorContext::new(None, actor_ref.clone(), dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),
     };
 
-    myself
-      .inner
-      .lock()
-      .await
-      .actor_context
+    actor_ref.set_actor_context_ref(myself.get_actor_context().await.actor_context_ref());
+
+    myself.get_actor_context().await
       .set_actor_system_ref(myself.actor_system_ref())
       .await;
 
     myself
+  }
+
+  pub(crate) async fn get_actor_context(&self) -> ActorContext {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.actor_context.clone()
   }
 
   pub fn actor_system_ref(&self) -> ActorSystemRef {
@@ -69,9 +74,9 @@ impl ActorSystem {
     }
   }
 
-  pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActor>>>> {
+  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<Arc<Mutex<Box<dyn AnyActorWriter>>>> {
     let inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.find_actor(path).await
+    inner_lock.actor_context.find_actor_writer(path).await
   }
 
   pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> ActorRef<A::M> {
