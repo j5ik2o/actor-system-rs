@@ -35,6 +35,9 @@ pub struct Mailbox {
   system_message_queue: Queue<SystemMessage>,
 }
 
+unsafe impl Send for Mailbox {}
+unsafe impl Sync for Mailbox {}
+
 impl Mailbox {
   pub async fn new() -> Self {
     let message_queue = create_queue::<AnyMessage>(QueueType::MPSC, QueueSize::Limited(512)).await;

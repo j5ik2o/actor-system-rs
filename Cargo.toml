@@ -11,7 +11,7 @@ futures = "0.3.30"
 tokio = { version = "1.37.0" , features = ["full"] }
 num_enum = "0.7.2"
 thiserror = "1.0.61"
-tokio-condvar = { version = "0.1.0", optional = false }
+tokio-condvar = { version = "0.3.0", optional = false }
 oni-comb-uri-rs = "0.2.1"
 log = "0.4.21"
 env_logger = "0.11.3"

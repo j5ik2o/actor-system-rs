@@ -28,9 +28,18 @@ pub trait Actor: Debug + Clone + Send + Sync {
   }
   async fn pre_start(&mut self, ctx: ActorContext);
 
+  async fn child_terminated(&mut self, ctx: ActorContext, child: UntypedActorRef) {
+    log::debug!("child_terminated: {:?}, {:?}", ctx.self_path().await, child.path());
+  }
+
+  async fn all_children_terminated(&mut self, ctx: ActorContext) {
+    log::debug!("all_children_terminated: {:?}", ctx.self_path().await);
+  }
+
   async fn around_post_stop(&mut self, ctx: ActorContext) {
     self.post_stop(ctx).await;
   }
+
   async fn post_stop(&mut self, ctx: ActorContext) {
     log::debug!("post_stop: {:?}", ctx.self_path().await)
   }

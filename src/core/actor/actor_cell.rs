@@ -101,19 +101,9 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
     log::debug!("child_terminated: {:?}", child);
     let actor_context = self.get_actor_context().await;
     actor_context.remove_child(child.path()).await;
-
+    self.actor.child_terminated(actor_context.clone(), child).await;
     if actor_context.is_child_empty().await {
-      let actor_context_ref = self.get_actor_context_ref();
-      let actor_context = actor_context_ref.upgrade().await.unwrap();
-
-      self.actor.around_post_stop(actor_context.clone()).await;
-      if let Some(parent_ref) = self.get_parent().await {
-        parent_ref
-          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-            self.get_actor_context().await.self_ref().await,
-          )))
-          .await;
-      }
+      self.actor.all_children_terminated(actor_context).await;
     }
   }
 

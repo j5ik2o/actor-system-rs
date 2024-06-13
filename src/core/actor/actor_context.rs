@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 use tokio::sync::Mutex;
+use tokio_condvar::Condvar;
 
 use crate::core::actor::actor_cell::ActorCell;
 use crate::core::actor::actor_path::ActorPath;
@@ -12,7 +14,7 @@ use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, 
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ActorContextInner {
   parent_context_ref: Option<ActorContextRef>,
   self_ref: UntypedActorRef,
@@ -21,6 +23,24 @@ pub struct ActorContextInner {
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
   actor_system_ref: Option<ActorSystemRef>,
+  terminate_notify: Arc<Condvar>
+}
+
+unsafe impl Send for ActorContextInner {}
+unsafe impl Sync for ActorContextInner {}
+
+impl std::fmt::Debug for ActorContextInner {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("ActorContextInner")
+      .field("parent_context_ref", &self.parent_context_ref)
+      .field("self_ref", &self.self_ref)
+      .field("child_writers", &self.child_writers)
+      .field("child_readers", &self.child_readers)
+      .field("child_contexts", &self.child_contexts)
+      .field("dispatcher", &self.dispatcher)
+      .field("actor_system_ref", &self.actor_system_ref)
+      .finish()
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +70,7 @@ impl ActorContext {
         child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
         actor_system_ref: None,
+        terminate_notify: Arc::new(Condvar::new()),
       })),
     }
   }
