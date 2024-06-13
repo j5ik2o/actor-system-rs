@@ -47,7 +47,7 @@ impl AnyActorRef for UntypedActorRef {
 
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
+    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
       actor_context.dispatch().await;
@@ -62,13 +62,11 @@ impl SysTell for UntypedActorRef {
   async fn sys_tell(&self, message: SystemMessage) {
     log::debug!("sys_tell: {:?}", message);
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
-      log::debug!("sys_tell-1: {:?}", message);
+    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
       {
         let actor_mg = actor_arc.lock().await;
         actor_mg.send_system_message(message.clone()).await.unwrap();
       }
-      log::debug!("sys_tell-2: {:?}", message);
       actor_context.dispatch().await;
     } else {
       panic!("actor not found");
@@ -118,7 +116,7 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 
   async fn tell_any(&self, message: AnyMessage) {
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
+    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
       log::debug!("sending a message to {}, message = {:?}", self.inner.path, message);
       actor_arc.lock().await.send_message(message).await.unwrap();
       actor_context.dispatch().await;
@@ -132,7 +130,7 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 impl<M: Message> SysTell for ActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
     let actor_context = self.inner.actor_context_ref.as_ref().unwrap().upgrade().await.unwrap();
-    if let Some(actor_arc) = actor_context.find_actor(&self.inner.path).await {
+    if let Some(actor_arc) = actor_context.find_actor_writer(&self.inner.path).await {
       let lock = actor_arc.lock().await;
       lock.send_system_message(message).await.unwrap();
       actor_context.dispatch().await;

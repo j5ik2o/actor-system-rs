@@ -20,7 +20,7 @@ impl Element for MyMessage {}
 impl Message for MyMessage {}
 
 // アクターの例
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MyActor {
   answer: i32,
 }
@@ -46,11 +46,11 @@ impl Actor for MyActor {
     }
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
     child.tell(MyMessage{ value: 1 }).await;
-    // ctx.self_ref().await.stop().await;
+    ctx.self_ref().await.stop().await;
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EchoActor {
   answer: i32,
 }
@@ -71,7 +71,7 @@ impl Actor for EchoActor {
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
-    ctx.terminate_system().await;
+    // ctx.terminate_system().await;
   }
 }
 

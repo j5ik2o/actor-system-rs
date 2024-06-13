@@ -8,7 +8,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::ActorSystemRef;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
+use crate::core::actor::{Actor, AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorReaderArc, AnyActorRef};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -16,7 +16,8 @@ use crate::core::dispatch::mailbox::Mailbox;
 pub struct ActorContextInner {
   parent_context_ref: Option<ActorContextRef>,
   self_ref: UntypedActorRef,
-  children: Arc<Mutex<HashMap<ActorPath, AnyActorArc>>>,
+  child_writers: Arc<Mutex<HashMap<ActorPath, AnyActorWriterArc>>>,
+  child_readers: Arc<Mutex<HashMap<ActorPath, AnyActorReaderArc>>>,
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
   actor_system_ref: Option<ActorSystemRef>,
@@ -44,7 +45,8 @@ impl ActorContext {
       inner: Arc::new(Mutex::new(ActorContextInner {
         parent_context_ref,
         self_ref,
-        children: Arc::new(Mutex::new(HashMap::new())),
+        child_writers: Arc::new(Mutex::new(HashMap::new())),
+        child_readers: Arc::new(Mutex::new(HashMap::new())),
         child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
         actor_system_ref: None,
@@ -74,19 +76,19 @@ impl ActorContext {
 
   pub async fn is_child_empty(&self) -> bool {
     let lock = self.inner.lock().await;
-    let children_lock = lock.children.lock().await;
+    let children_lock = lock.child_writers.lock().await;
     children_lock.is_empty()
   }
 
-  pub async fn get_children(&self) -> Vec<AnyActorArc> {
+  pub async fn get_children(&self) -> Vec<AnyActorWriterArc> {
     let lock = self.inner.lock().await;
-    let children_lock = lock.children.lock().await;
+    let children_lock = lock.child_writers.lock().await;
     children_lock.values().cloned().collect()
   }
 
-  pub async fn remove_child(&self, path: &ActorPath) -> Option<AnyActorArc> {
+  pub async fn remove_child(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
     let lock = self.inner.lock().await;
-    let mut children_lock = lock.children.lock().await;
+    let mut children_lock = lock.child_writers.lock().await;
     children_lock.remove(path)
   }
 
@@ -117,9 +119,15 @@ impl ActorContext {
     }
   }
 
-  pub(crate) async fn find_actor(&self, path: &ActorPath) -> Option<AnyActorArc> {
+  pub(crate) async fn find_actor_writer(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
     let inner_lock = self.inner.lock().await;
-    let actors = inner_lock.children.lock().await;
+    let actors = inner_lock.child_writers.lock().await;
+    actors.get(path).cloned()
+  }
+
+  pub(crate) async fn find_actor_reader(&self, path: &ActorPath) -> Option<AnyActorReaderArc> {
+    let inner_lock = self.inner.lock().await;
+    let actors = inner_lock.child_readers.lock().await;
     actors.get(path).cloned()
   }
 
@@ -146,21 +154,32 @@ impl ActorContext {
 
     let child_actor = props.create();
     let child_actor_cell = ActorCell::new(child_actor, mailbox.clone());
-    let child_actor_cell_arc = Arc::new(Mutex::new(Box::new(child_actor_cell) as Box<dyn AnyActor>));
-    mailbox.set_actor(child_actor_cell_arc.clone()).await;
+    let child_actor_writer_arc = Arc::new(Mutex::new(Box::new(child_actor_cell.clone()) as Box<dyn AnyActorWriter>));
+    let child_actor_reader_arc = Arc::new(Mutex::new(Box::new(child_actor_cell) as Box<dyn AnyActorReader>));
+    mailbox.set_actor_writer(child_actor_writer_arc.clone()).await;
+    mailbox.set_actor_reader(child_actor_reader_arc.clone()).await;
 
     {
       let inner_lock = self.inner.lock().await;
-      let mut children_mg = inner_lock.children.lock().await;
-      children_mg.insert(child_actor_path.clone(), child_actor_cell_arc.clone());
+      let mut children_mg = inner_lock.child_writers.lock().await;
+      children_mg.insert(child_actor_path.clone(), child_actor_writer_arc.clone());
+
+      let mut children_readers_mg = inner_lock.child_readers.lock().await;
+      children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
+
       let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
       child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
     }
 
     {
-      let mut child_actor_cell_arc_mg = child_actor_cell_arc.lock().await;
-      child_actor_cell_arc_mg.set_actor_context_ref(child_context_ref);
-      child_actor_cell_arc_mg.start().await.unwrap();
+      let mut child_actor_writer_arc_mg = child_actor_reader_arc.lock().await;
+      child_actor_writer_arc_mg.set_actor_context_ref(child_context_ref.clone());
+    }
+
+    {
+      let mut child_actor_writer_arc_mg = child_actor_writer_arc.lock().await;
+      child_actor_writer_arc_mg.set_actor_context_ref(child_context_ref);
+      child_actor_writer_arc_mg.start().await.unwrap();
     }
 
     self.register(mailbox).await;

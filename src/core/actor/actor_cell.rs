@@ -8,14 +8,14 @@ use tokio::sync::Mutex;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
-use crate::core::actor::{Actor, AnyActor, AnyActorArc, AnyActorRef};
+use crate::core::actor::{Actor, AnyActorWriter, AnyActorWriterArc, AnyActorReader, AnyActorRef};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::message::AutoReceivedMessage;
 use crate::core::util::queue::QueueError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ActorCell<A: Actor> {
   actor: A,
   mailbox: Mailbox,
@@ -43,13 +43,13 @@ impl<A: Actor> ActorCell<A> {
 }
 
 #[async_trait]
-impl<A: Actor + 'static> AnyActor for ActorCell<A> {
+impl<A: Actor + 'static> AnyActorWriter for ActorCell<A> {
   async fn path(&self) -> ActorPath {
     self.get_actor_context().await.self_ref().await.path().clone()
   }
 
-  fn set_actor_context_ref(&mut self, actor_context: ActorContextRef) {
-    self.actor_context_opt = Some(actor_context);
+  fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
+    self.actor_context_opt = Some(actor_context_ref);
   }
 
   async fn get_parent(&self) -> Option<UntypedActorRef> {
@@ -60,7 +60,7 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     }
   }
 
-  async fn get_children(&self) -> Vec<AnyActorArc> {
+  async fn get_children(&self) -> Vec<AnyActorWriterArc> {
     let actor_context = self.get_actor_context().await;
     actor_context.get_children().await
   }
@@ -90,6 +90,14 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
     self.send_system_message(SystemMessage::Resume).await
   }
 
+}
+
+#[async_trait]
+impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
+  fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
+    self.actor_context_opt = Some(actor_context_ref);
+  }
+
   async fn child_terminated(&mut self, child: UntypedActorRef) {
     log::debug!("child_terminated: {:?}", child);
     let actor_context = self.get_actor_context().await;
@@ -102,10 +110,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
       self.actor.around_post_stop(actor_context.clone()).await;
       if let Some(parent_ref) = self.get_parent().await {
         parent_ref
-          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-            self.get_actor_context().await.self_ref().await
-          )))
-          .await;
+            .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+              self.get_actor_context().await.self_ref().await
+            )))
+            .await;
       }
     }
   }
@@ -147,10 +155,10 @@ impl<A: Actor + 'static> AnyActor for ActorCell<A> {
           self.actor.around_post_stop(actor_context.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
             parent_ref
-              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-                self.get_actor_context().await.self_ref().await,
-              )))
-              .await;
+                .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+                  self.get_actor_context().await.self_ref().await,
+                )))
+                .await;
           }
         }
       }
