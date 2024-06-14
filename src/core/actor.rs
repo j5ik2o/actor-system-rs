@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -26,7 +27,9 @@ pub trait Actor: Debug + Send + Sync {
   async fn around_pre_start(&mut self, ctx: ActorContext) {
     self.pre_start(ctx).await;
   }
-  async fn pre_start(&mut self, ctx: ActorContext);
+  async fn pre_start(&mut self, ctx: ActorContext) {
+    log::debug!("pre_start: {}", ctx.self_path().await);
+  }
 
   async fn child_terminated(&mut self, ctx: ActorContext, child: UntypedActorRef) {
     log::debug!("child_terminated: {}, {}", ctx.self_path().await, child.path());
@@ -44,7 +47,7 @@ pub trait Actor: Debug + Send + Sync {
     log::debug!("post_stop: {}", ctx.self_path().await)
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M);
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 
 #[async_trait::async_trait]

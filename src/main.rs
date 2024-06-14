@@ -1,4 +1,5 @@
 use std::env;
+use std::error::Error;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -44,13 +45,14 @@ impl Actor for MyActor {
     ctx.self_ref().await.stop().await;
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>> {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");
     }
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
     child.tell(MyMessage { value: 1 }).await;
+    Ok(())
   }
 }
 
@@ -73,10 +75,11 @@ impl Actor for EchoActor {
     log::debug!("pre_start: {}", ctx.self_path().await);
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>> {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     ctx.self_ref().await.stop().await;
     // ctx.terminate_system().await;
+    Ok(())
   }
 }
 

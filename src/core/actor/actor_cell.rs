@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -141,6 +142,12 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     let actor_context = actor_context_ref.upgrade().await.as_ref().unwrap().clone();
     actor_context
   }
+
+  async fn handle_invoke_failure(&mut self, error: Box<dyn Error + Send>) {
+    // TODO: Suspend the current actor
+    // TODO: Suspend child actors
+    // TODO: Notify the parent actor of the failure
+  }
 }
 
 #[async_trait]
@@ -227,7 +234,10 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
       let actor_context = self.get_actor_context().await;
-      self.actor.receive(actor_context, message).await;
+      let result = self.actor.receive(actor_context, message).await;
+      if let Err(error) = result {
+        self.handle_invoke_failure(error).await;
+      }
     }
   }
 
@@ -264,6 +274,13 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
       }
       SystemMessage::Unwatch { watchee, watcher } => {
         log::debug!("Unwatch: {}", self.path().await);
+      }
+      SystemMessage::Failed { child_ref, cause } => {
+        log::debug!("Failed: {}", self.path().await);
+        // TODO: 親アクターで失敗を処理する
+        // if !self.actor.supervisorStrategy().handleFailure(ctx,child_ref,cause) {
+        //  self.handle_invoke_failure(cause).await;
+        // }
       }
       SystemMessage::Terminate => {
         log::debug!(
