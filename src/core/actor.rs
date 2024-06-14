@@ -19,6 +19,7 @@ pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
 pub mod props;
+mod supervisor_strategy;
 
 #[async_trait::async_trait]
 pub trait Actor: Debug + Send + Sync {
