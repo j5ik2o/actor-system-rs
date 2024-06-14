@@ -22,6 +22,9 @@ pub enum SystemMessage {
     child_ref: UntypedActorRef,
     cause: Arc<Box<dyn Error + Send + Sync>>,
   },
+  Recreate {
+    cause: Arc<Box<dyn Error + Send + Sync>>,
+  },
   Terminate,
 }
 

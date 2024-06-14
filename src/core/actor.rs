@@ -7,6 +7,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -80,6 +81,8 @@ pub trait AnyActorReader: Debug + Send + Sync {
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
 
+  fn supervisor_strategy(&self) -> Arc<Box<dyn SupervisorStrategy>>;
+
   async fn get_terminate_notify(&self) -> Arc<Notify>;
 }
 
@@ -106,6 +109,9 @@ pub trait SysTell: AnyActorRef {
   }
   async fn resume(&mut self) {
     self.sys_tell(SystemMessage::Resume).await;
+  }
+  async fn restart(&mut self, cause: Arc<Box<dyn Error + Send + Sync>>) {
+    self.sys_tell(SystemMessage::Recreate { cause }).await;
   }
 
   async fn when_terminated(&self);

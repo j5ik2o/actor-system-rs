@@ -10,6 +10,7 @@ use tokio_condvar::Condvar;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -143,10 +144,27 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     actor_context
   }
 
-  async fn handle_invoke_failure(&mut self, error: Box<dyn Error + Send>) {
-    // TODO: Suspend the current actor
-    // TODO: Suspend child actors
-    // TODO: Notify the parent actor of the failure
+  async fn handle_invoke_failure(&mut self, cause: Arc<Box<dyn Error + Send>>) {
+    log::error!("handle_invoke_failure: {:?}", cause);
+    let actor_context = self.get_actor_context().await;
+    let mut self_ref = actor_context.self_ref().await;
+    self_ref.suspend().await;
+    let child_refs = actor_context.get_child_refs().await;
+    for mut child_ref in child_refs {
+      child_ref.suspend().await;
+    }
+    let mut parent_ref_opt = match self.get_parent().await {
+      Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
+      _ => None,
+    };
+    if let Some(parent_ref) = &mut parent_ref_opt {
+      parent_ref
+        .sys_tell(SystemMessage::Failed {
+          child_ref: self_ref.clone(),
+          cause,
+        })
+        .await;
+    }
   }
 }
 
@@ -236,7 +254,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
       let actor_context = self.get_actor_context().await;
       let result = self.actor.receive(actor_context, message).await;
       if let Err(error) = result {
-        self.handle_invoke_failure(error).await;
+        self.handle_invoke_failure(Arc::new(error)).await;
       }
     }
   }
@@ -282,6 +300,9 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
         //  self.handle_invoke_failure(cause).await;
         // }
       }
+      SystemMessage::Recreate { cause } => {
+        log::debug!("Recreate: {}", self.path().await);
+      }
       SystemMessage::Terminate => {
         log::debug!(
           "Terminate: {}, suspend = {}",
@@ -315,6 +336,10 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
 
   async fn get_terminate_notify(&self) -> Arc<Notify> {
     self.terminate_notify.clone()
+  }
+
+  fn supervisor_strategy(&self) -> Arc<Box<dyn SupervisorStrategy>> {
+    todo!()
   }
 }
 
