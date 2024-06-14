@@ -19,6 +19,7 @@ pub mod actor_path;
 pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
+mod death_watch;
 pub mod props;
 pub mod supervisor_strategy;
 
