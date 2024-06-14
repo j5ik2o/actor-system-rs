@@ -52,6 +52,13 @@ pub struct ActorContextRef {
   inner: Weak<Mutex<ActorContextInner>>,
 }
 
+impl Eq for ActorContextRef {}
+impl PartialEq for ActorContextRef {
+  fn eq(&self, other: &Self) -> bool {
+    self.inner.ptr_eq(&other.inner)
+  }
+}
+
 impl ActorContextRef {
   pub async fn upgrade(&self) -> Option<ActorContext> {
     self.inner.upgrade().map(|inner| ActorContext { inner })
@@ -124,13 +131,9 @@ impl ActorContext {
   pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {
-    log::debug!("terminate_system: 1");
     let actor_system_ref = self.get_actor_system_ref().await;
-    log::debug!("terminate_system: 2");
     let actor_system = actor_system_ref.upgrade().unwrap();
-    log::debug!("terminate_system: 3");
     actor_system.terminate().await;
-    log::debug!("terminate_system: 4");
   }
 
   pub async fn self_path(&self) -> ActorPath {

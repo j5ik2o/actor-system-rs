@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 use crate::core::actor::actor_cell::ActorCellWriter;
@@ -14,6 +15,13 @@ struct ActorRefInner {
   path: ActorPath,
   actor_cell_writer: Option<AnyActorWriterArc>,
   actor_context_ref: Option<ActorContextRef>,
+}
+
+impl Eq for ActorRefInner {}
+impl PartialEq for ActorRefInner {
+  fn eq(&self, other: &Self) -> bool {
+    self.path == other.path
+  }
 }
 
 impl ActorRefInner {
@@ -40,7 +48,7 @@ impl ActorRefInner {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct UntypedActorRef {
   inner: ActorRefInner,
 }
@@ -62,6 +70,12 @@ impl UntypedActorRef {
 
   pub fn set_actor_cell_writer(&mut self, cell_writer: AnyActorWriterArc) {
     self.inner.actor_cell_writer = Some(cell_writer);
+  }
+}
+
+impl Hash for UntypedActorRef {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.inner.path.hash(state);
   }
 }
 

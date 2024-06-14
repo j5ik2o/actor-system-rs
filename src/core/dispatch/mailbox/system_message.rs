@@ -1,3 +1,4 @@
+use crate::core::actor::actor_ref::UntypedActorRef;
 use std::fmt::Debug;
 
 use crate::core::util::element::Element;
@@ -7,6 +8,14 @@ pub enum SystemMessage {
   Create,
   Suspend,
   Resume,
+  Watch {
+    watchee: UntypedActorRef,
+    watcher: UntypedActorRef,
+  },
+  Unwatch {
+    watchee: UntypedActorRef,
+    watcher: UntypedActorRef,
+  },
   Terminate,
 }
 
