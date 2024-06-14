@@ -39,6 +39,10 @@ impl Actor for MyActor {
     log::debug!("pre_start: {}", ctx.self_path().await);
   }
 
+  async fn all_children_terminated(&mut self, ctx: ActorContext) {
+    ctx.self_ref().await.stop().await;
+  }
+
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     if message.value == self.answer {
@@ -46,8 +50,9 @@ impl Actor for MyActor {
     }
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
     child.tell(MyMessage { value: 1 }).await;
-    ctx.self_ref().await.stop().await;
   }
+
+
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +76,7 @@ impl Actor for EchoActor {
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
-    // ctx.terminate_system().await;
+    ctx.self_ref().await.stop().await;
   }
 }
 

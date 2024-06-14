@@ -100,6 +100,17 @@ impl SysTell for UntypedActorRef {
     }
     actor_context.dispatch().await;
   }
+
+  async fn when_terminated(&self) {
+    let terminate_notify = {
+      let actor_cell_writer = self.inner.get_actor_cell_writer();
+      let actor_writer_arc_mg = actor_cell_writer.lock().await;
+      actor_writer_arc_mg.get_terminate_notify().await.clone()
+    };
+    log::debug!("when_terminated: start {}", self.inner.path());
+    terminate_notify.notified().await;
+    log::debug!("when_terminated: finish {}", self.inner.path());
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -169,5 +180,9 @@ impl<M: Message> SysTell for ActorRef<M> {
       actor_writer_arc_mg.send_system_message(message).await.unwrap();
     }
     actor_context.dispatch().await;
+  }
+
+  async fn when_terminated(&self) {
+    todo!()
   }
 }

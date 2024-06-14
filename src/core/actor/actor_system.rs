@@ -7,7 +7,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorWriter};
+use crate::core::actor::{Actor, AnyActorWriter, SysTell};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -82,7 +82,11 @@ impl ActorSystem {
   }
 
   pub async fn when_terminated(&self) {
-    self.termination_notify.notified().await;
+    let actor_context = self.get_actor_context().await;
+    let child_refs = actor_context.get_child_refs().await;
+    for child_ref in child_refs {
+      child_ref.when_terminated().await
+    }
   }
 
   pub async fn terminate(&self) {

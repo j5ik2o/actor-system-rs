@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
@@ -29,11 +29,11 @@ pub trait Actor: Debug + Clone + Send + Sync {
   async fn pre_start(&mut self, ctx: ActorContext);
 
   async fn child_terminated(&mut self, ctx: ActorContext, child: UntypedActorRef) {
-    log::debug!("child_terminated: {:?}, {:?}", ctx.self_path().await, child.path());
+    log::debug!("child_terminated: {}, {}", ctx.self_path().await, child.path());
   }
 
   async fn all_children_terminated(&mut self, ctx: ActorContext) {
-    log::debug!("all_children_terminated: {:?}", ctx.self_path().await);
+    log::debug!("all_children_terminated: {}", ctx.self_path().await);
   }
 
   async fn around_post_stop(&mut self, ctx: ActorContext) {
@@ -41,7 +41,7 @@ pub trait Actor: Debug + Clone + Send + Sync {
   }
 
   async fn post_stop(&mut self, ctx: ActorContext) {
-    log::debug!("post_stop: {:?}", ctx.self_path().await)
+    log::debug!("post_stop: {}", ctx.self_path().await)
   }
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M);
@@ -61,6 +61,8 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   async fn stop(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn resume(&self) -> Result<(), QueueError<SystemMessage>>;
+
+  async fn get_terminate_notify(&self) -> Arc<Notify>;
 }
 
 #[async_trait::async_trait]
@@ -71,7 +73,7 @@ pub trait AnyActorReader: Debug + Send + Sync {
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
 
-  async fn when_terminated(&self);
+  async fn get_terminate_notify(&self) -> Arc<Notify>;
 
 }
 
@@ -99,4 +101,7 @@ pub trait SysTell: AnyActorRef {
   async fn resume(&mut self) {
     self.sys_tell(SystemMessage::Resume).await;
   }
+
+  async fn when_terminated(&self);
+
 }

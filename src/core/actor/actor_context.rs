@@ -113,6 +113,16 @@ impl ActorContext {
     children_lock.remove(path)
   }
 
+  pub async fn get_child_refs(&self) -> Vec<UntypedActorRef> {
+    let lock = self.inner.lock().await;
+    let child_contexts_mg = lock.child_contexts.lock().await;
+    let mut result = vec![];
+    for (_, ctx) in child_contexts_mg.iter()   {
+      result.push(ctx.self_ref().await);
+    }
+    result
+  }
+
   pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {

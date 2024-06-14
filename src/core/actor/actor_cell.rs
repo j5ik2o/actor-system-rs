@@ -7,7 +7,7 @@ use tokio::sync::{Mutex, Notify};
 use tokio_condvar::Condvar;
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
-use crate::core::actor::actor_path::ActorPath;
+use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::any_message::AnyMessage;
@@ -92,6 +92,10 @@ impl<A: Actor + 'static> AnyActorWriter for ActorCell<A> {
   async fn resume(&self) -> Result<(), QueueError<SystemMessage>> {
     self.send_system_message(SystemMessage::Resume).await
   }
+
+  async fn get_terminate_notify(&self) -> Arc<Notify> {
+    self.terminate_notify.clone()
+  }
 }
 
 #[async_trait]
@@ -101,7 +105,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
   }
 
   async fn child_terminated(&mut self, child: UntypedActorRef) {
-    log::debug!("child_terminated: {:?}", child);
+    log::debug!("child_terminated: {}", child.path());
     let actor_context = self.get_actor_context().await;
     actor_context.remove_child(child.path()).await;
     self.actor.child_terminated(actor_context.clone(), child).await;
@@ -158,22 +162,29 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
             child.stop().await.unwrap();
           }
         } else {
-          self.actor.around_post_stop(actor_context.clone()).await;
           if let Some(parent_ref) = self.get_parent().await {
-            parent_ref
-              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-                self.get_actor_context().await.self_ref().await,
-              )))
-              .await;
+            if parent_ref.path().is_child() {
+              let self_ref = self.get_actor_context().await.self_ref().await;
+              log::debug!("parent_ref: {} <- child_ref: {}", parent_ref.path(), self_ref.path());
+              parent_ref
+                  .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
+                    self_ref
+                  )))
+                  .await;
+            }
           }
+          self.actor.around_post_stop(actor_context.clone()).await;
+          log::debug!("terminate_notify.notify_waiters(): start");
           self.terminate_notify.notify_waiters();
+          log::debug!("terminate_notify.notify_waiters(): finish");
         }
       }
     }
   }
 
-  async fn when_terminated(&self) {
-    self.terminate_notify.notified().await;
+
+  async fn get_terminate_notify(&self) -> Arc<Notify> {
+    self.terminate_notify.clone()
   }
 }
 
