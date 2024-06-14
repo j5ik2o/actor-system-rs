@@ -90,9 +90,11 @@ impl ActorSystem {
   }
 
   pub async fn terminate(&self) {
-    let inner_lock = self.inner.lock().await;
-    inner_lock.dispatcher.stop().await;
-    self.termination_notify.notify_waiters();
+    let actor_context = self.get_actor_context().await;
+    let child_refs = actor_context.get_child_refs().await;
+    for mut child_ref in child_refs {
+      child_ref.stop().await
+    }
   }
 
   pub(crate) async fn register(&self, mailbox: Mailbox) {

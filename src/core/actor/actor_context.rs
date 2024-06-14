@@ -117,7 +117,7 @@ impl ActorContext {
     let lock = self.inner.lock().await;
     let child_contexts_mg = lock.child_contexts.lock().await;
     let mut result = vec![];
-    for (_, ctx) in child_contexts_mg.iter()   {
+    for (_, ctx) in child_contexts_mg.iter() {
       result.push(ctx.self_ref().await);
     }
     result
@@ -126,9 +126,13 @@ impl ActorContext {
   pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {
+    log::debug!("terminate_system: 1");
     let actor_system_ref = self.get_actor_system_ref().await;
+    log::debug!("terminate_system: 2");
     let actor_system = actor_system_ref.upgrade().unwrap();
+    log::debug!("terminate_system: 3");
     actor_system.terminate().await;
+    log::debug!("terminate_system: 4");
   }
 
   pub async fn self_path(&self) -> ActorPath {
@@ -191,8 +195,8 @@ impl ActorContext {
         children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
       }
       {
-      let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
-      child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
+        let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
+        child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
       }
     }
 

@@ -40,6 +40,7 @@ impl Actor for MyActor {
   }
 
   async fn all_children_terminated(&mut self, ctx: ActorContext) {
+    log::debug!("all_children_terminated: {}", ctx.self_path().await);
     ctx.self_ref().await.stop().await;
   }
 
@@ -51,8 +52,6 @@ impl Actor for MyActor {
     let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
     child.tell(MyMessage { value: 1 }).await;
   }
-
-
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +76,7 @@ impl Actor for EchoActor {
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     ctx.self_ref().await.stop().await;
+    // ctx.terminate_system().await;
   }
 }
 
@@ -89,8 +89,9 @@ async fn main() {
   let props = Props::new(|| MyActor::new(42));
   let actor_ref = system.actor_of(props, "actor1").await;
   tokio::spawn(async move {
-    sleep(Duration::from_secs(1));
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     actor_ref.tell(MyMessage { value: 42 }).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
   });
   system.when_terminated().await;
 }

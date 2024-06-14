@@ -306,7 +306,6 @@ impl Mailbox {
       if !is_should_process_message {
         break;
       }
-
       match self.dequeue_message().await {
         Ok(Some(mut message)) => {
           if message.is_type::<AutoReceivedMessage>() {
@@ -321,6 +320,7 @@ impl Mailbox {
               _ => {}
             }
           } else {
+            log::debug!("Mailbox process message: {:?}", message);
             let actor_arc = self.get_actor_reader_arc().await.unwrap();
             let mut actor_mg = actor_arc.lock().await;
             actor_mg.invoke(message).await;

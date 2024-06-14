@@ -9,7 +9,7 @@ use tokio_condvar::Condvar;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
-use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
+use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -110,7 +110,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
     actor_context.remove_child(child.path()).await;
     self.actor.child_terminated(actor_context.clone(), child).await;
     if actor_context.is_child_empty().await {
-      self.actor.all_children_terminated(actor_context).await;
+      self.actor.all_children_terminated(actor_context.clone()).await;
     }
   }
 
@@ -155,33 +155,30 @@ impl<A: Actor + 'static> AnyActorReader for ActorCell<A> {
           self.path().await,
           self.mailbox.is_suspend().await
         );
-        self.mailbox.become_closed().await;
         if !actor_context.is_child_empty().await {
-          for child in &actor_context.get_children().await {
-            let child = child.lock().await;
-            child.stop().await.unwrap();
+          for mut child in actor_context.get_child_refs().await {
+            child.stop().await;
           }
         } else {
-          if let Some(parent_ref) = self.get_parent().await {
-            if parent_ref.path().is_child() {
-              let self_ref = self.get_actor_context().await.self_ref().await;
-              log::debug!("parent_ref: {} <- child_ref: {}", parent_ref.path(), self_ref.path());
-              parent_ref
-                  .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(
-                    self_ref
-                  )))
-                  .await;
-            }
+          let parent_ref_opt = match self.get_parent().await {
+            Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
+            _ => None,
+          };
+          if let Some(parent_ref) = &parent_ref_opt {
+            let self_ref = self.get_actor_context().await.self_ref().await;
+            parent_ref
+              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(self_ref)))
+              .await;
           }
           self.actor.around_post_stop(actor_context.clone()).await;
-          log::debug!("terminate_notify.notify_waiters(): start");
-          self.terminate_notify.notify_waiters();
-          log::debug!("terminate_notify.notify_waiters(): finish");
+          if parent_ref_opt.is_none() {
+            self.mailbox.become_closed().await;
+            self.terminate_notify.notify_waiters();
+          }
         }
       }
     }
   }
-
 
   async fn get_terminate_notify(&self) -> Arc<Notify> {
     self.terminate_notify.clone()

@@ -29,11 +29,4 @@ impl Dispatcher {
       });
     }
   }
-
-  pub async fn stop(&self) {
-    // let mailboxes = self.mailboxes.lock().await.clone();
-    // for mut mailbox in mailboxes {
-    //   // mailbox.sender_mut().await.disconnect();
-    // }
-  }
 }

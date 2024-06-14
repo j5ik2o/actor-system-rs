@@ -74,7 +74,6 @@ pub trait AnyActorReader: Debug + Send + Sync {
   async fn system_invoke(&mut self, system_message: SystemMessage);
 
   async fn get_terminate_notify(&self) -> Arc<Notify>;
-
 }
 
 pub type AnyActorWriterArc = Arc<Mutex<Box<dyn AnyActorWriter>>>;
@@ -103,5 +102,4 @@ pub trait SysTell: AnyActorRef {
   }
 
   async fn when_terminated(&self);
-
 }
