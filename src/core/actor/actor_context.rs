@@ -23,7 +23,6 @@ pub struct ActorContextInner {
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
   actor_system_ref: Option<ActorSystemRef>,
-  terminate_notify: Arc<Condvar>,
 }
 
 unsafe impl Send for ActorContextInner {}
@@ -70,7 +69,6 @@ impl ActorContext {
         child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
         actor_system_ref: None,
-        terminate_notify: Arc::new(Condvar::new()),
       })),
     }
   }
