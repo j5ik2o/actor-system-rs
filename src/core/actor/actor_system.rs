@@ -40,7 +40,10 @@ impl ActorSystemRef {
 
 impl ActorSystem {
   pub async fn new() -> Self {
-    let dispatcher = Dispatcher::new();
+    Self::with_dispatcher(Dispatcher::new()).await
+  }
+
+  pub async fn with_dispatcher(dispatcher: Dispatcher) -> Self {
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
     let mut actor_ref = UntypedActorRef::new(actor_path);
@@ -56,10 +59,10 @@ impl ActorSystem {
     actor_ref.set_actor_context_ref(myself.get_actor_context().await.actor_context_ref());
 
     myself
-      .get_actor_context()
-      .await
-      .set_actor_system_ref(myself.actor_system_ref())
-      .await;
+        .get_actor_context()
+        .await
+        .set_actor_system_ref(myself.actor_system_ref())
+        .await;
 
     myself
   }
