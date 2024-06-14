@@ -11,7 +11,7 @@ use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::supervisor_strategy::SupervisorStrategy;
-use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
+use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -144,7 +144,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     actor_context
   }
 
-  async fn handle_invoke_failure(&mut self, cause: Arc<Box<dyn Error + Send>>) {
+  async fn handle_invoke_failure(&mut self, cause: Arc<ActorError>) {
     log::error!("handle_invoke_failure: {:?}", cause);
     let actor_context = self.get_actor_context().await;
     let mut self_ref = actor_context.self_ref().await;

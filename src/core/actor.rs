@@ -20,7 +20,9 @@ pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
 pub mod props;
-mod supervisor_strategy;
+pub mod supervisor_strategy;
+
+pub type ActorError = Box<dyn Error + Send + Sync + 'static>;
 
 #[async_trait::async_trait]
 pub trait Actor: Debug + Send + Sync {
@@ -49,7 +51,7 @@ pub trait Actor: Debug + Send + Sync {
     log::debug!("post_stop: {}", ctx.self_path().await)
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>>;
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), ActorError>;
 }
 
 #[async_trait::async_trait]
@@ -110,7 +112,7 @@ pub trait SysTell: AnyActorRef {
   async fn resume(&mut self) {
     self.sys_tell(SystemMessage::Resume).await;
   }
-  async fn restart(&mut self, cause: Arc<Box<dyn Error + Send + Sync>>) {
+  async fn restart(&mut self, cause: Arc<ActorError>) {
     self.sys_tell(SystemMessage::Recreate { cause }).await;
   }
 

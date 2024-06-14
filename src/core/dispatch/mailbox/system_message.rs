@@ -1,4 +1,5 @@
 use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::ActorError;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -20,10 +21,10 @@ pub enum SystemMessage {
   },
   Failed {
     child_ref: UntypedActorRef,
-    cause: Arc<Box<dyn Error + Send + Sync>>,
+    cause: Arc<ActorError>,
   },
   Recreate {
-    cause: Arc<Box<dyn Error + Send + Sync>>,
+    cause: Arc<ActorError>,
   },
   Terminate,
 }

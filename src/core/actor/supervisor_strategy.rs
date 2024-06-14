@@ -1,6 +1,6 @@
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_ref::UntypedActorRef;
-use crate::core::actor::SysTell;
+use crate::core::actor::{ActorError, SysTell};
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +13,7 @@ enum Directive {
   Escalate,
 }
 
-type Decider = Arc<Box<dyn Fn(Arc<Box<dyn Error + Send + Sync>>) -> Directive>>;
+type Decider = Arc<Box<dyn Fn(Arc<ActorError>) -> Directive>>;
 
 #[async_trait::async_trait]
 pub trait SupervisorStrategy {
@@ -25,7 +25,7 @@ pub trait SupervisorStrategy {
     ctx: ActorContext,
     restart: bool,
     child: UntypedActorRef,
-    cause: Arc<Box<dyn Error + Send + Sync>>,
+    cause: Arc<ActorError>,
     children: Vec<UntypedActorRef>,
   );
 }
@@ -77,7 +77,7 @@ impl SupervisorStrategy for OneForOneStrategy {
     ctx: ActorContext,
     restart: bool,
     mut child: UntypedActorRef,
-    cause: Arc<Box<dyn Error + Send + Sync>>,
+    cause: Arc<ActorError>,
     children: Vec<UntypedActorRef>,
   ) {
     if restart {
@@ -87,6 +87,9 @@ impl SupervisorStrategy for OneForOneStrategy {
     }
   }
 }
+
+unsafe impl Send for OneForOneStrategy {}
+unsafe impl Sync for OneForOneStrategy {}
 
 fn max_nr_of_retries_option(max_nr_of_retries: i32) -> Option<i32> {
   if max_nr_of_retries < 0 {

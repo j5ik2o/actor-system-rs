@@ -8,7 +8,7 @@ use tokio_condvar::Condvar;
 use crate::core::actor::actor_cell::{ActorCellReader, ActorCellWriter};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
-use crate::core::actor::actor_system::ActorSystemRef;
+use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::dispatcher::Dispatcher;
@@ -66,7 +66,11 @@ impl ActorContextRef {
 }
 
 impl ActorContext {
-  pub fn new(parent_context_ref: Option<ActorContextRef>, self_ref: UntypedActorRef, dispatcher: Dispatcher) -> Self {
+  pub(crate) fn new(
+    parent_context_ref: Option<ActorContextRef>,
+    self_ref: UntypedActorRef,
+    dispatcher: Dispatcher,
+  ) -> Self {
     Self {
       inner: Arc::new(Mutex::new(ActorContextInner {
         parent_context_ref,
@@ -80,7 +84,7 @@ impl ActorContext {
     }
   }
 
-  pub async fn set_actor_system_ref(&self, actor_system_ref: ActorSystemRef) {
+  pub(crate) async fn set_actor_system_ref(&self, actor_system_ref: ActorSystemRef) {
     let mut inner_lock = self.inner.lock().await;
     inner_lock.actor_system_ref = Some(actor_system_ref);
   }
@@ -88,6 +92,11 @@ impl ActorContext {
   pub(crate) async fn get_actor_system_ref(&self) -> ActorSystemRef {
     let inner_lock = self.inner.lock().await;
     inner_lock.actor_system_ref.as_ref().unwrap().clone()
+  }
+
+  pub(crate) async fn get_actor_system(&self) -> ActorSystem {
+    let result = self.get_actor_system_ref().await;
+    result.upgrade().unwrap()
   }
 
   pub(crate) async fn get_parent_context_ref(&self) -> Option<ActorContextRef> {
@@ -131,8 +140,7 @@ impl ActorContext {
   pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {
-    let actor_system_ref = self.get_actor_system_ref().await;
-    let actor_system = actor_system_ref.upgrade().unwrap();
+    let actor_system = self.get_actor_system().await;
     actor_system.terminate().await;
   }
 

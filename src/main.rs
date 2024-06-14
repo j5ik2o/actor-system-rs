@@ -6,7 +6,7 @@ use std::time::Duration;
 use actor_system_rs::core::actor::actor_context::ActorContext;
 use actor_system_rs::core::actor::actor_system::ActorSystem;
 use actor_system_rs::core::actor::props::Props;
-use actor_system_rs::core::actor::{Actor, SysTell};
+use actor_system_rs::core::actor::{Actor, ActorError, SysTell};
 use actor_system_rs::core::dispatch::message::Message;
 use actor_system_rs::core::util::element::Element;
 
@@ -45,7 +45,7 @@ impl Actor for MyActor {
     ctx.self_ref().await.stop().await;
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>> {
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), ActorError> {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");
@@ -75,7 +75,7 @@ impl Actor for EchoActor {
     log::debug!("pre_start: {}", ctx.self_path().await);
   }
 
-  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), Box<dyn Error + Send + Sync>> {
+  async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), ActorError> {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
     ctx.self_ref().await.stop().await;
     // ctx.terminate_system().await;
