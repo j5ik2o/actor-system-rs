@@ -101,7 +101,13 @@ impl SupervisorStrategy for OneForOneStrategy {
     self.decider.clone()
   }
 
-  async fn handle_child_terminated(&self, _ctx: ActorContext, _child: UntypedActorRef, _children: Vec<UntypedActorRef>) {}
+  async fn handle_child_terminated(
+    &self,
+    _ctx: ActorContext,
+    _child: UntypedActorRef,
+    _children: Vec<UntypedActorRef>,
+  ) {
+  }
 
   async fn process_failure(
     &self,
