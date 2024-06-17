@@ -168,7 +168,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
   async fn handle_terminated(&mut self) {
     let actor_context = self.get_actor_context().await;
     log::debug!(
-      "Terminate: {}, suspend = {}",
+      "Terminate: path = {}, suspend = {}",
       self.path().await,
       self.mailbox.is_suspend().await
     );
@@ -311,7 +311,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
         caused_by_failure: cause,
       } => self.handle_resume(cause).await,
       SystemMessage::Terminate => self.handle_terminated().await,
-      SystemMessage::Supervise { .. } => {}
+      SystemMessage::Supervise { .. } => {} // use RepointableActorRef
       SystemMessage::Watch { watchee, watcher } => self.handle_watch(watchee, watcher).await,
       SystemMessage::Unwatch { watchee, watcher } => self.handle_unwatch(watchee, watcher).await,
       SystemMessage::Failed {
