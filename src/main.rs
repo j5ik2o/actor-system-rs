@@ -1,7 +1,4 @@
 use std::env;
-use std::error::Error;
-use std::thread::sleep;
-use std::time::Duration;
 
 use actor_system_rs::core::actor::actor_context::ActorContext;
 use actor_system_rs::core::actor::actor_system::ActorSystem;

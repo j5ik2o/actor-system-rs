@@ -1,23 +1,28 @@
-use crate::core::actor::actor_context::ActorContext;
-use crate::core::actor::actor_ref::UntypedActorRef;
-use crate::core::actor::{ActorError, SysTell};
-use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
+use once_cell::sync::Lazy;
+
+use crate::core::actor::actor_context::ActorContext;
+use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::{ActorError, SysTell};
+
 #[derive(Debug, Clone)]
-enum Directive {
+pub enum Directive {
   Resume,
   Restart,
   Stop,
   Escalate,
 }
 
-type Decider = Arc<Box<dyn Fn(Arc<ActorError>) -> Directive>>;
+pub const RESTART_DECIDER: Lazy<DeciderArc> = Lazy::new(|| Arc::new(Box::new(|_: Arc<ActorError>| Directive::Restart)));
+pub const STOP_DECIDER: Lazy<DeciderArc> = Lazy::new(|| Arc::new(Box::new(|_: Arc<ActorError>| Directive::Stop)));
+
+pub type DeciderArc = Arc<Box<dyn Fn(Arc<ActorError>) -> Directive + Send + Sync + 'static>>;
 
 #[async_trait::async_trait]
-pub trait SupervisorStrategy {
-  fn decider(&self) -> Decider;
+pub trait SupervisorStrategy: Send + Sync + 'static {
+  fn decider(&self) -> DeciderArc;
   async fn handle_child_terminated(&self, ctx: ActorContext, child: UntypedActorRef, children: Vec<UntypedActorRef>);
 
   async fn process_failure(
@@ -28,17 +33,43 @@ pub trait SupervisorStrategy {
     cause: Arc<ActorError>,
     children: Vec<UntypedActorRef>,
   );
+
+  async fn handle_failure(
+    &self,
+    ctx: ActorContext,
+    _restart: bool,
+    mut child: UntypedActorRef,
+    cause: Arc<ActorError>,
+    children: Vec<UntypedActorRef>,
+  ) -> bool {
+    let directive = self.decider()(cause.clone());
+    match directive {
+      Directive::Resume => {
+        child.resume(cause).await;
+        true
+      }
+      Directive::Restart => {
+        self.process_failure(ctx, true, child, cause, children).await;
+        true
+      }
+      Directive::Stop => {
+        self.process_failure(ctx, false, child, cause, children).await;
+        true
+      }
+      Directive::Escalate => false,
+    }
+  }
 }
 
 pub struct OneForOneStrategy {
   max_nr_of_retries: i32,
   within_time_range: Duration,
   logging_enabled: bool,
-  decider: Decider,
+  decider: DeciderArc,
 }
 
 impl OneForOneStrategy {
-  pub fn new(max_nr_of_retries: i32, within_time_range: Duration, logging_enabled: bool, decider: Decider) -> Self {
+  pub fn new(max_nr_of_retries: i32, within_time_range: Duration, logging_enabled: bool, decider: DeciderArc) -> Self {
     Self {
       max_nr_of_retries,
       within_time_range,
@@ -47,7 +78,7 @@ impl OneForOneStrategy {
     }
   }
 
-  pub fn with_decider(decider: Decider) -> Self {
+  pub fn with_decider(decider: DeciderArc) -> Self {
     Self::new(-1, Duration::from_millis(u64::MAX), true, decider)
   }
 
@@ -66,19 +97,19 @@ impl OneForOneStrategy {
 
 #[async_trait::async_trait]
 impl SupervisorStrategy for OneForOneStrategy {
-  fn decider(&self) -> Decider {
+  fn decider(&self) -> DeciderArc {
     self.decider.clone()
   }
 
-  async fn handle_child_terminated(&self, ctx: ActorContext, child: UntypedActorRef, children: Vec<UntypedActorRef>) {}
+  async fn handle_child_terminated(&self, _ctx: ActorContext, _child: UntypedActorRef, _children: Vec<UntypedActorRef>) {}
 
   async fn process_failure(
     &self,
-    ctx: ActorContext,
+    _ctx: ActorContext,
     restart: bool,
     mut child: UntypedActorRef,
     cause: Arc<ActorError>,
-    children: Vec<UntypedActorRef>,
+    _children: Vec<UntypedActorRef>,
   ) {
     if restart {
       child.restart(cause).await

@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
+use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 
 use crate::core::dispatch::mailbox::Mailbox;

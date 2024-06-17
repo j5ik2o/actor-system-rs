@@ -7,7 +7,7 @@ use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorWriter, SysTell};
+use crate::core::actor::{Actor, SysTell};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 

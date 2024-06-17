@@ -1,16 +1,25 @@
-use crate::core::actor::actor_ref::UntypedActorRef;
-use crate::core::actor::ActorError;
-use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::ActorError;
 use crate::core::util::element::Element;
 
 #[derive(Debug, Clone)]
 pub enum SystemMessage {
   Create,
+  Recreate {
+    cause: Arc<ActorError>,
+  },
   Suspend,
-  Resume,
+  Resume {
+    caused_by_failure: Arc<ActorError>,
+  },
+  Terminate,
+  Supervise {
+    child: UntypedActorRef,
+    r#async: bool,
+  },
   Watch {
     watchee: UntypedActorRef,
     watcher: UntypedActorRef,
@@ -23,10 +32,6 @@ pub enum SystemMessage {
     child_ref: UntypedActorRef,
     cause: Arc<ActorError>,
   },
-  Recreate {
-    cause: Arc<ActorError>,
-  },
-  Terminate,
 }
 
 impl Element for SystemMessage {}

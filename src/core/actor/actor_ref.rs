@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use crate::core::actor::actor_cell::ActorCellWriter;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::{AnyActorRef, AnyActorWriterArc, SysTell};
@@ -70,6 +69,12 @@ impl UntypedActorRef {
 
   pub fn set_actor_cell_writer(&mut self, cell_writer: AnyActorWriterArc) {
     self.inner.actor_cell_writer = Some(cell_writer);
+  }
+}
+
+impl std::fmt::Display for UntypedActorRef {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.inner.path)
   }
 }
 
@@ -158,6 +163,12 @@ impl<M: Message> ActorRef<M> {
 
   pub async fn tell(&self, message: M) {
     self.tell_any(AnyMessage::new(message)).await;
+  }
+}
+
+impl<M: Message> std::fmt::Display for ActorRef<M> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.inner.path)
   }
 }
 

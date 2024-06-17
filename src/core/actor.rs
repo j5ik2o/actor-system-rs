@@ -7,7 +7,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::UntypedActorRef;
-use crate::core::actor::supervisor_strategy::SupervisorStrategy;
+use crate::core::actor::supervisor_strategy::{OneForOneStrategy, SupervisorStrategy, RESTART_DECIDER};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -28,6 +28,10 @@ pub type ActorError = Box<dyn Error + Send + Sync + 'static>;
 #[async_trait::async_trait]
 pub trait Actor: Debug + Send + Sync {
   type M: Message;
+
+  async fn supervisor_strategy(&self) -> Arc<Box<dyn SupervisorStrategy>> {
+    Arc::new(Box::new(OneForOneStrategy::with_decider(RESTART_DECIDER.clone())))
+  }
 
   async fn around_pre_start(&mut self, ctx: ActorContext) {
     self.pre_start(ctx).await;
@@ -68,7 +72,7 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   async fn start(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn stop(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
-  async fn resume(&self) -> Result<(), QueueError<SystemMessage>>;
+  async fn resume(&self, cause: Arc<ActorError>) -> Result<(), QueueError<SystemMessage>>;
 
   async fn get_terminate_notify(&self) -> Arc<Notify>;
 }
@@ -110,8 +114,12 @@ pub trait SysTell: AnyActorRef {
   async fn suspend(&mut self) {
     self.sys_tell(SystemMessage::Suspend).await;
   }
-  async fn resume(&mut self) {
-    self.sys_tell(SystemMessage::Resume).await;
+  async fn resume(&mut self, cause: Arc<ActorError>) {
+    self
+      .sys_tell(SystemMessage::Resume {
+        caused_by_failure: cause,
+      })
+      .await;
   }
   async fn restart(&mut self, cause: Arc<ActorError>) {
     self.sys_tell(SystemMessage::Recreate { cause }).await;

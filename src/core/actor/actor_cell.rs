@@ -1,15 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use rand::{thread_rng, RngCore};
-use tokio::sync::{Mutex, Notify};
-use tokio_condvar::Condvar;
+use tokio::sync::{Notify};
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
-use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::{UntypedActorRef};
 use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
@@ -95,6 +92,118 @@ impl<A: Actor + 'static> ActorCellReader<A> {
         .await;
     }
   }
+
+  async fn handle_create(&mut self) {
+    let actor_context = self.get_actor_context().await;
+    log::debug!(
+      "Create: path = {}, suspend = {}",
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+    self.actor.around_pre_start(actor_context).await;
+  }
+
+  async fn handle_suspend(&mut self) {
+    log::debug!(
+      "Suspend: path = {}, suspend = {}",
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+    self.mailbox.suspend().await;
+  }
+
+  async fn handle_resume(&mut self, cause: Arc<ActorError>) {
+    log::debug!(
+      "Resume: case = {}, path = {}, suspend = {}",
+      cause,
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+    self.mailbox.resume().await;
+  }
+
+  async fn handle_watch(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+    log::debug!(
+      "Watch: watchee = {}, watcher {}, path = {}, suspend = {}",
+      watchee,
+      watcher,
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+  }
+
+  async fn handle_unwatch(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+    log::debug!(
+      "Unwatch: watchee = {}, watcher {}, path = {}, suspend = {}",
+      watchee,
+      watcher,
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+  }
+
+  async fn handle_failed(&mut self, child_ref: &mut UntypedActorRef, cause: Arc<ActorError>) {
+    let actor_context = self.get_actor_context().await;
+    log::debug!("Failed: {}", self.path().await);
+    if !self
+      .actor
+      .supervisor_strategy()
+      .await
+      .handle_failure(actor_context, false, child_ref.clone(), cause.clone(), vec![])
+      .await
+    {
+      self.handle_invoke_failure(cause).await;
+    }
+  }
+
+  async fn handle_recreate(&mut self, cause: Arc<ActorError>) {
+    log::debug!(
+      "Recreate: cause = {}, path = {}, suspend = {}",
+      cause,
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+  }
+
+  async fn handle_terminated(&mut self) {
+    let actor_context = self.get_actor_context().await;
+    log::debug!(
+      "Terminate: {}, suspend = {}",
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+    if !actor_context.is_child_empty().await {
+      for mut child in actor_context.get_child_refs().await {
+        child.stop().await;
+      }
+    } else {
+      let parent_ref_opt = match self.get_parent().await {
+        Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
+        _ => None,
+      };
+      if let Some(parent_ref) = &parent_ref_opt {
+        let self_ref = self.get_actor_context().await.self_ref().await;
+        parent_ref
+          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(self_ref)))
+          .await;
+      }
+      self.actor.around_post_stop(actor_context.clone()).await;
+      self.mailbox.become_closed().await;
+      if parent_ref_opt.is_none() {
+        self.terminate_notify.notify_waiters();
+      }
+    }
+  }
+
+  async fn handle_supervise(&mut self, child: UntypedActorRef, r#async: bool) {
+    log::debug!(
+      "Supervise: child = {}, async = {}, path = {}, suspend = {}",
+      child,
+      r#async,
+      self.path().await,
+      self.mailbox.is_suspend().await
+    );
+  }
 }
 
 #[async_trait]
@@ -141,8 +250,12 @@ impl AnyActorWriter for ActorCellWriter {
     self.send_system_message(SystemMessage::Suspend).await
   }
 
-  async fn resume(&self) -> Result<(), QueueError<SystemMessage>> {
-    self.send_system_message(SystemMessage::Resume).await
+  async fn resume(&self, cause: Arc<ActorError>) -> Result<(), QueueError<SystemMessage>> {
+    self
+      .send_system_message(SystemMessage::Resume {
+        caused_by_failure: cause,
+      })
+      .await
   }
 
   async fn get_terminate_notify(&self) -> Arc<Notify> {
@@ -188,78 +301,23 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
     }
   }
 
-  async fn system_invoke(&mut self, system_message: SystemMessage) {
+  async fn system_invoke(&mut self, mut system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
-    let actor_context = self.get_actor_context().await;
     match system_message {
-      SystemMessage::Create => {
-        log::debug!(
-          "Create: {}, suspend = {}",
-          self.path().await,
-          self.mailbox.is_suspend().await
-        );
-        self.actor.around_pre_start(actor_context).await;
-      }
-      SystemMessage::Suspend => {
-        log::debug!(
-          "Suspend: {}, suspend = {}",
-          self.path().await,
-          self.mailbox.is_suspend().await
-        );
-        self.mailbox.suspend().await;
-      }
-      SystemMessage::Resume => {
-        log::debug!(
-          "Resume: {}, suspend = {}",
-          self.path().await,
-          self.mailbox.is_suspend().await
-        );
-        self.mailbox.resume().await;
-      }
-      SystemMessage::Watch { watchee, watcher } => {
-        log::debug!("Watch: {}", self.path().await);
-      }
-      SystemMessage::Unwatch { watchee, watcher } => {
-        log::debug!("Unwatch: {}", self.path().await);
-      }
-      SystemMessage::Failed { child_ref, cause } => {
-        log::debug!("Failed: {}", self.path().await);
-        // TODO: 親アクターで失敗を処理する
-        // if !self.actor.supervisorStrategy().handleFailure(ctx,child_ref,cause) {
-        //  self.handle_invoke_failure(cause).await;
-        // }
-      }
-      SystemMessage::Recreate { cause } => {
-        log::debug!("Recreate: {}", self.path().await);
-      }
-      SystemMessage::Terminate => {
-        log::debug!(
-          "Terminate: {}, suspend = {}",
-          self.path().await,
-          self.mailbox.is_suspend().await
-        );
-        if !actor_context.is_child_empty().await {
-          for mut child in actor_context.get_child_refs().await {
-            child.stop().await;
-          }
-        } else {
-          let parent_ref_opt = match self.get_parent().await {
-            Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
-            _ => None,
-          };
-          if let Some(parent_ref) = &parent_ref_opt {
-            let self_ref = self.get_actor_context().await.self_ref().await;
-            parent_ref
-              .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated(self_ref)))
-              .await;
-          }
-          self.actor.around_post_stop(actor_context.clone()).await;
-          self.mailbox.become_closed().await;
-          if parent_ref_opt.is_none() {
-            self.terminate_notify.notify_waiters();
-          }
-        }
-      }
+      SystemMessage::Create => self.handle_create().await,
+      SystemMessage::Recreate { cause } => self.handle_recreate(cause).await,
+      SystemMessage::Suspend => self.handle_suspend().await,
+      SystemMessage::Resume {
+        caused_by_failure: cause,
+      } => self.handle_resume(cause).await,
+      SystemMessage::Terminate => self.handle_terminated().await,
+      SystemMessage::Supervise { .. } => {}
+      SystemMessage::Watch { watchee, watcher } => self.handle_watch(watchee, watcher).await,
+      SystemMessage::Unwatch { watchee, watcher } => self.handle_unwatch(watchee, watcher).await,
+      SystemMessage::Failed {
+        ref mut child_ref,
+        cause,
+      } => self.handle_failed(child_ref, cause).await,
     }
   }
 

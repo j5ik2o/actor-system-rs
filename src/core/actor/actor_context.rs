@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 use tokio::sync::{Mutex, Notify};
-use tokio_condvar::Condvar;
 
 use crate::core::actor::actor_cell::{ActorCellReader, ActorCellWriter};
 use crate::core::actor::actor_path::ActorPath;
@@ -137,7 +135,7 @@ impl ActorContext {
     result
   }
 
-  pub async fn stop_actor(&self, untyped_actor_ref: UntypedActorRef) {}
+  pub async fn stop_actor(&self, _untyped_actor_ref: UntypedActorRef) {}
 
   pub async fn terminate_system(&self) {
     let actor_system = self.get_actor_system().await;
