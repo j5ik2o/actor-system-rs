@@ -1,6 +1,6 @@
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
@@ -39,7 +39,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     actor_context
   }
 
-  async fn self_ref(&self) -> UntypedActorRef {
+  async fn self_ref(&self) -> InternalActorRef {
     self.get_actor_context().await.self_ref().await
   }
 
@@ -102,7 +102,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     self.mailbox.resume().await;
   }
 
-  async fn handle_watch(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+  async fn handle_watch(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
     log::debug!(
       "Watch: watchee = {}, watcher = {}, path = {}, suspend = {}",
       watchee,
@@ -112,7 +112,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     );
   }
 
-  async fn handle_unwatch(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+  async fn handle_unwatch(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
     log::debug!(
       "Unwatch: watchee = {}, watcher = {}, path = {}, suspend = {}",
       watchee,
@@ -122,7 +122,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     );
   }
 
-  async fn handle_failed(&mut self, child_ref: &mut UntypedActorRef, cause: Arc<ActorError>) {
+  async fn handle_failed(&mut self, child_ref: &mut InternalActorRef, cause: Arc<ActorError>) {
     let actor_context = self.get_actor_context().await;
     log::debug!(
       "Failed: child_ref = {}, cause = {}, path = {}, suspend = {}",
@@ -181,7 +181,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     }
   }
 
-  async fn handle_supervise(&mut self, child: UntypedActorRef, r#async: bool) {
+  async fn handle_supervise(&mut self, child: LocalActorRef, r#async: bool) {
     log::debug!(
       "Supervise: child = {}, async = {}, path = {}, suspend = {}",
       child,
@@ -198,7 +198,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
     self.get_actor_context().await.self_ref().await.path().clone()
   }
 
-  async fn get_parent(&self) -> Option<UntypedActorRef> {
+  async fn get_parent(&self) -> Option<InternalActorRef> {
     let result = self.get_actor_context().await.get_parent_context().await;
     match result {
       Some(parent_context) => Some(parent_context.self_ref().await.clone()),
@@ -210,7 +210,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
     self.actor_context_ref_opt = Some(actor_context_ref);
   }
 
-  async fn child_terminated(&mut self, child: UntypedActorRef) {
+  async fn child_terminated(&mut self, child: InternalActorRef) {
     log::debug!("child_terminated: {}", child.path());
     let actor_context = self.get_actor_context().await;
     actor_context.remove_child(child.path()).await;

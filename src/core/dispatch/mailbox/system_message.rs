@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::ActorError;
 use crate::core::util::element::Element;
 
@@ -17,19 +17,19 @@ pub enum SystemMessage {
   },
   Terminate,
   Supervise {
-    child: UntypedActorRef,
+    child: InternalActorRef,
     r#async: bool,
   },
   Watch {
-    watchee: UntypedActorRef,
-    watcher: UntypedActorRef,
+    watchee: InternalActorRef,
+    watcher: InternalActorRef,
   },
   Unwatch {
-    watchee: UntypedActorRef,
-    watcher: UntypedActorRef,
+    watchee: InternalActorRef,
+    watcher: InternalActorRef,
   },
   Failed {
-    child_ref: UntypedActorRef,
+    child_ref: InternalActorRef,
     cause: Arc<ActorError>,
   },
 }
@@ -60,19 +60,19 @@ impl SystemMessage {
     Self::Terminate
   }
 
-  pub fn supervise(child: UntypedActorRef, r#async: bool) -> Self {
+  pub fn supervise(child: InternalActorRef, r#async: bool) -> Self {
     Self::Supervise { child, r#async }
   }
 
-  pub fn watch(watchee: UntypedActorRef, watcher: UntypedActorRef) -> Self {
+  pub fn watch(watchee: InternalActorRef, watcher: InternalActorRef) -> Self {
     Self::Watch { watchee, watcher }
   }
 
-  pub fn unwatch(watchee: UntypedActorRef, watcher: UntypedActorRef) -> Self {
+  pub fn unwatch(watchee: InternalActorRef, watcher: InternalActorRef) -> Self {
     Self::Unwatch { watchee, watcher }
   }
 
-  pub fn failed(child_ref: UntypedActorRef, cause: Arc<ActorError>) -> Self {
+  pub fn failed(child_ref: InternalActorRef, cause: Arc<ActorError>) -> Self {
     Self::Failed { child_ref, cause }
   }
 }

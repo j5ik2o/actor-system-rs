@@ -4,7 +4,7 @@ use std::time::Duration;
 use once_cell::sync::Lazy;
 
 use crate::core::actor::actor_context::ActorContext;
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::{ActorError, SysTell};
 
 #[derive(Debug, Clone)]
@@ -23,24 +23,24 @@ pub type DeciderArc = Arc<Box<dyn Fn(Arc<ActorError>) -> Directive + Send + Sync
 #[async_trait::async_trait]
 pub trait SupervisorStrategy: Send + Sync + 'static {
   fn decider(&self) -> DeciderArc;
-  async fn handle_child_terminated(&self, ctx: ActorContext, child: UntypedActorRef, children: Vec<UntypedActorRef>);
+  async fn handle_child_terminated(&self, ctx: ActorContext, child: InternalActorRef, children: Vec<InternalActorRef>);
 
   async fn process_failure(
     &self,
     ctx: ActorContext,
     restart: bool,
-    child: UntypedActorRef,
+    child: InternalActorRef,
     cause: Arc<ActorError>,
-    children: Vec<UntypedActorRef>,
+    children: Vec<InternalActorRef>,
   );
 
   async fn handle_failure(
     &self,
     ctx: ActorContext,
     _restart: bool,
-    mut child: UntypedActorRef,
+    mut child: InternalActorRef,
     cause: Arc<ActorError>,
-    children: Vec<UntypedActorRef>,
+    children: Vec<InternalActorRef>,
   ) -> bool {
     let directive = self.decider()(cause.clone());
     match directive {
@@ -104,8 +104,8 @@ impl SupervisorStrategy for OneForOneStrategy {
   async fn handle_child_terminated(
     &self,
     _ctx: ActorContext,
-    _child: UntypedActorRef,
-    _children: Vec<UntypedActorRef>,
+    _child: InternalActorRef,
+    _children: Vec<InternalActorRef>,
   ) {
   }
 
@@ -113,9 +113,9 @@ impl SupervisorStrategy for OneForOneStrategy {
     &self,
     _ctx: ActorContext,
     restart: bool,
-    mut child: UntypedActorRef,
+    mut child: InternalActorRef,
     cause: Arc<ActorError>,
-    _children: Vec<UntypedActorRef>,
+    _children: Vec<InternalActorRef>,
   ) {
     if restart {
       child.restart(cause).await

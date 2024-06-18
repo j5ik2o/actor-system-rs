@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::{AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -9,9 +9,9 @@ use crate::core::dispatch::message::AutoReceivedMessage;
 
 pub struct DeathWatch {
   actor_context_ref: ActorContextRef,
-  watching: HashMap<UntypedActorRef, Option<AnyMessage>>,
-  watched_by: HashSet<UntypedActorRef>,
-  terminated_queued: HashMap<UntypedActorRef, Option<AnyMessage>>,
+  watching: HashMap<InternalActorRef, Option<AnyMessage>>,
+  watched_by: HashSet<InternalActorRef>,
+  terminated_queued: HashMap<InternalActorRef, Option<AnyMessage>>,
 }
 
 impl DeathWatch {
@@ -34,7 +34,7 @@ impl DeathWatch {
     actor_context
   }
 
-  async fn self_ref(&self) -> UntypedActorRef {
+  async fn self_ref(&self) -> InternalActorRef {
     self.get_actor_context().await.self_ref().await
   }
 
@@ -42,24 +42,24 @@ impl DeathWatch {
     todo!()
   }
 
-  fn is_watching(&self, subject: &UntypedActorRef) -> bool {
+  fn is_watching(&self, subject: &InternalActorRef) -> bool {
     self.watching.contains_key(subject)
   }
 
-  async fn update_watching(&mut self, subject: &UntypedActorRef, message: Option<AnyMessage>) {
+  async fn update_watching(&mut self, subject: &InternalActorRef, message: Option<AnyMessage>) {
     if let Some(v) = self.watching.get_mut(subject) {
       *v = message;
     }
   }
 
-  async fn check_watching_some(&self, subject: &UntypedActorRef) {
+  async fn check_watching_some(&self, subject: &InternalActorRef) {
     let previous = self.watching.get(&subject);
     if previous != None {
       panic!("Watched by: {}", subject.path());
     }
   }
 
-  async fn send_terminated(&self, if_local: bool, watcher: UntypedActorRef) {
+  async fn send_terminated(&self, if_local: bool, watcher: LocalActorRef) {
     // if watcher.is_local() == if_local {
     //
     // }
@@ -70,7 +70,7 @@ impl DeathWatch {
     }
   }
 
-  pub async fn watch(&mut self, subject: UntypedActorRef) -> UntypedActorRef {
+  pub async fn watch(&mut self, subject: InternalActorRef) -> InternalActorRef {
     let self_ref = self.self_ref().await;
     if subject != self_ref {
       if !self.watching.contains_key(&subject) {
@@ -88,7 +88,7 @@ impl DeathWatch {
     subject
   }
 
-  pub async fn unwatch(&mut self, subject: UntypedActorRef) -> UntypedActorRef {
+  pub async fn unwatch(&mut self, subject: InternalActorRef) -> InternalActorRef {
     let self_ref = self.actor_context_ref.upgrade().await.unwrap().self_ref().await;
     if subject != self_ref {
       if self.watching.contains_key(&subject) {
@@ -107,7 +107,7 @@ impl DeathWatch {
 
   pub(crate) async fn watched_actor_terminated(
     &mut self,
-    actor: UntypedActorRef,
+    actor: InternalActorRef,
     existence_confirmed: bool,
     address_terminated: bool,
   ) {
@@ -127,13 +127,13 @@ impl DeathWatch {
     }
   }
 
-  fn terminated_queued_for(&mut self, subject: UntypedActorRef, custom_message: Option<AnyMessage>) {
+  fn terminated_queued_for(&mut self, subject: InternalActorRef, custom_message: Option<AnyMessage>) {
     if !self.terminated_queued.contains_key(&subject) {
       self.terminated_queued.insert(subject, custom_message);
     }
   }
 
-  pub async fn add_watcher(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+  pub async fn add_watcher(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
     let self_ref = self.get_actor_context().await.self_ref().await;
     let watchee_self = watchee == self_ref;
     let watcher_self = watcher == self_ref;
@@ -153,7 +153,7 @@ impl DeathWatch {
     }
   }
 
-  pub async fn rem_watcher(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+  pub async fn rem_watcher(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
     let self_ref = self.get_actor_context().await.self_ref().await;
     let watchee_self = watchee == self_ref;
     let watcher_self = watcher == self_ref;

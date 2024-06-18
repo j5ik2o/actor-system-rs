@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
 use crate::core::actor::actor_cell::actor_cell_writer::ActorCellWriter;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{TypedActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::{TypedActorRef, LocalActorRef, InternalActorRef};
 use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
@@ -16,7 +16,7 @@ use crate::core::dispatch::mailbox::Mailbox;
 #[derive(Clone)]
 pub struct ActorContextInner {
   parent_context_ref: Option<ActorContextRef>,
-  self_ref: UntypedActorRef,
+  self_ref: InternalActorRef,
   child_writers: Arc<Mutex<HashMap<ActorPath, AnyActorWriterArc>>>,
   child_readers: Arc<Mutex<HashMap<ActorPath, AnyActorReaderArc>>>,
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
@@ -67,7 +67,7 @@ impl ActorContextRef {
 impl ActorContext {
   pub(crate) fn new(
     parent_context_ref: Option<ActorContextRef>,
-    self_ref: UntypedActorRef,
+    self_ref: InternalActorRef,
     dispatcher: Dispatcher,
   ) -> Self {
     Self {
@@ -126,7 +126,7 @@ impl ActorContext {
     children_lock.remove(path)
   }
 
-  pub async fn get_child_refs(&self) -> Vec<UntypedActorRef> {
+  pub async fn get_child_refs(&self) -> Vec<InternalActorRef> {
     let lock = self.inner.lock().await;
     let child_contexts_mg = lock.child_contexts.lock().await;
     let mut result = vec![];
@@ -136,7 +136,7 @@ impl ActorContext {
     result
   }
 
-  pub async fn stop_actor(&self, _untyped_actor_ref: UntypedActorRef) {}
+  pub async fn stop_actor(&self, _untyped_actor_ref: LocalActorRef) {}
 
   pub async fn terminate_system(&self) {
     let actor_system = self.get_actor_system().await;
@@ -148,7 +148,7 @@ impl ActorContext {
     inner_lock.self_ref.path().clone()
   }
 
-  pub async fn self_ref(&self) -> UntypedActorRef {
+  pub async fn self_ref(&self) -> InternalActorRef {
     let inner_lock = self.inner.lock().await;
     inner_lock.self_ref.clone()
   }

@@ -4,7 +4,7 @@ use tokio::sync::Notify;
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::{ActorError, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -48,7 +48,7 @@ impl AnyActorWriter for ActorCellWriter {
     self.actor_context_ref_opt = Some(actor_context_ref);
   }
 
-  async fn get_parent(&self) -> Option<UntypedActorRef> {
+  async fn get_parent(&self) -> Option<InternalActorRef> {
     let result = self.get_actor_context().await.get_parent_context().await;
     match result {
       Some(parent_context) => Some(parent_context.self_ref().await.clone()),

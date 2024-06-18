@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{TypedActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::{TypedActorRef, LocalActorRef, InternalActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, SysTell};
@@ -46,11 +46,11 @@ impl ActorSystem {
   pub async fn with_dispatcher(dispatcher: Dispatcher) -> Self {
     let address = Address::new("local", "system");
     let actor_path = ActorPath::of_root(address);
-    let mut actor_ref = UntypedActorRef::new(actor_path);
+    let mut actor_ref = LocalActorRef::new(actor_path);
 
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(None, actor_ref.clone(), dispatcher.clone()),
+        actor_context: ActorContext::new(None, InternalActorRef::Local(actor_ref.clone()), dispatcher.clone()),
         dispatcher,
       })),
       termination_notify: Arc::new(Notify::new()),

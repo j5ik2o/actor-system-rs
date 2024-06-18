@@ -1,4 +1,4 @@
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::util::element::Element;
 
 pub trait Message: Element + 'static {}
@@ -7,14 +7,14 @@ pub trait Message: Element + 'static {}
 pub enum AutoReceivedMessage {
   PoisonPill,
   Terminated {
-    actor: UntypedActorRef,
+    actor: InternalActorRef,
     existence_confirmed: bool,
     address_terminated: bool,
   },
 }
 
 impl AutoReceivedMessage {
-  pub fn terminated(actor: UntypedActorRef, existence_confirmed: bool, address_terminated: bool) -> Self {
+  pub fn terminated(actor: InternalActorRef, existence_confirmed: bool, address_terminated: bool) -> Self {
     Self::Terminated {
       actor,
       existence_confirmed,

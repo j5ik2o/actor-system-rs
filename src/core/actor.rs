@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::UntypedActorRef;
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::supervisor_strategy::{OneForOneStrategy, SupervisorStrategy, RESTART_DECIDER};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
@@ -40,7 +40,7 @@ pub trait Actor: Debug + Send + Sync {
     log::debug!("pre_start: {}", ctx.self_path().await);
   }
 
-  async fn child_terminated(&mut self, ctx: ActorContext, child: UntypedActorRef) {
+  async fn child_terminated(&mut self, ctx: ActorContext, child: InternalActorRef) {
     log::debug!("child_terminated: {}, {}", ctx.self_path().await, child.path());
   }
 
@@ -64,7 +64,7 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
   async fn path(&self) -> ActorPath;
 
-  async fn get_parent(&self) -> Option<UntypedActorRef>;
+  async fn get_parent(&self) -> Option<InternalActorRef>;
   async fn get_children(&self) -> Vec<AnyActorWriterArc>;
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
   async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
@@ -81,9 +81,9 @@ pub trait AnyActorWriter: Debug + Send + Sync {
 pub trait AnyActorReader: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
   async fn path(&self) -> ActorPath;
-  async fn get_parent(&self) -> Option<UntypedActorRef>;
+  async fn get_parent(&self) -> Option<InternalActorRef>;
 
-  async fn child_terminated(&mut self, child: UntypedActorRef);
+  async fn child_terminated(&mut self, child: InternalActorRef);
 
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
