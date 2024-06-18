@@ -311,7 +311,7 @@ impl Mailbox {
           if message.is_type::<AutoReceivedMessage>() {
             let msg = message.take::<AutoReceivedMessage>().unwrap();
             match msg {
-              AutoReceivedMessage::Terminated(child) => {
+              AutoReceivedMessage::Terminated { actor: child, .. } => {
                 log::debug!("Mailbox process message: {:?}", message);
                 let actor_arc = self.get_actor_reader_arc().await.unwrap();
                 let mut actor_mg = actor_arc.lock().await;

@@ -1,15 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::core::actor::actor_context::ActorContextRef;
+use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_ref::UntypedActorRef;
 use crate::core::actor::{AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
+use crate::core::dispatch::message::AutoReceivedMessage;
 
 pub struct DeathWatch {
   actor_context_ref: ActorContextRef,
   watching: HashMap<UntypedActorRef, Option<AnyMessage>>,
   watched_by: HashSet<UntypedActorRef>,
+  terminated_queued: HashMap<UntypedActorRef, Option<AnyMessage>>,
 }
 
 impl DeathWatch {
@@ -18,7 +20,22 @@ impl DeathWatch {
       actor_context_ref,
       watching: HashMap::new(),
       watched_by: HashSet::new(),
+      terminated_queued: HashMap::new(),
     }
+  }
+
+  pub(crate) fn get_actor_context_ref(&self) -> ActorContextRef {
+    self.actor_context_ref.clone()
+  }
+
+  pub(crate) async fn get_actor_context(&self) -> ActorContext {
+    let actor_context_ref = self.get_actor_context_ref();
+    let actor_context = actor_context_ref.upgrade().await.as_ref().unwrap().clone();
+    actor_context
+  }
+
+  fn is_terminating(&self) -> bool {
+    todo!()
   }
 
   fn is_watching(&self, subject: &UntypedActorRef) -> bool {
@@ -39,7 +56,7 @@ impl DeathWatch {
   }
 
   pub async fn watch(&mut self, subject: UntypedActorRef) -> UntypedActorRef {
-    let self_ref = self.actor_context_ref.upgrade().await.unwrap().self_ref().await;
+    let self_ref = self.get_actor_context().await.self_ref().await;
     if subject != self_ref {
       if !self.watching.contains_key(&subject) {
         subject
@@ -56,8 +73,53 @@ impl DeathWatch {
     subject
   }
 
-  pub async fn add_watcher(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+  pub async fn unwatch(&mut self, subject: UntypedActorRef) -> UntypedActorRef {
     let self_ref = self.actor_context_ref.upgrade().await.unwrap().self_ref().await;
+    if subject != self_ref {
+      if self.watching.contains_key(&subject) {
+        subject
+          .sys_tell(SystemMessage::Unwatch {
+            watchee: self_ref.clone(),
+            watcher: self_ref.clone(),
+          })
+          .await;
+        self.watching.remove(&subject);
+      }
+    }
+    self.terminated_queued.remove(&subject);
+    subject
+  }
+
+  pub(crate) async fn watched_actor_terminated(
+    &mut self,
+    actor: UntypedActorRef,
+    existence_confirmed: bool,
+    address_terminated: bool,
+  ) {
+    if self.watching.contains_key(&actor) {
+      let optional_message = self.watching.remove(&actor).unwrap();
+      let actor_context = self.get_actor_context().await;
+      if !self.is_terminating() {
+        actor
+          .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated {
+            actor: actor_context.self_ref().await,
+            existence_confirmed,
+            address_terminated,
+          }))
+          .await;
+        self.terminated_queued_for(actor, optional_message.clone());
+      }
+    }
+  }
+
+  fn terminated_queued_for(&mut self, subject: UntypedActorRef, custom_message: Option<AnyMessage>) {
+    if !self.terminated_queued.contains_key(&subject) {
+      self.terminated_queued.insert(subject, custom_message);
+    }
+  }
+
+  pub async fn add_watcher(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+    let self_ref = self.get_actor_context().await.self_ref().await;
     let watchee_self = watchee == self_ref;
     let watcher_self = watcher == self_ref;
 
@@ -69,7 +131,27 @@ impl DeathWatch {
       self.watch(watchee).await;
     } else {
       panic!(
-        "Invalid watch: watchee = {}, watcher = {}",
+        "Invalid add_watcher: watchee = {}, watcher = {}",
+        watchee.path(),
+        watcher.path()
+      );
+    }
+  }
+
+  pub async fn rem_watcher(&mut self, watchee: UntypedActorRef, watcher: UntypedActorRef) {
+    let self_ref = self.get_actor_context().await.self_ref().await;
+    let watchee_self = watchee == self_ref;
+    let watcher_self = watcher == self_ref;
+
+    if watchee_self && !watcher_self {
+      if self.watched_by.iter().any(|w| *w == watcher) {
+        self.watched_by.remove(&watcher);
+      }
+    } else if !watchee_self && watcher_self {
+      self.unwatch(watchee).await;
+    } else {
+      panic!(
+        "Invalid rem_watcher: watchee = {}, watcher = {}",
         watchee.path(),
         watcher.path()
       );

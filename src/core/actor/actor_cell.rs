@@ -1,7 +1,5 @@
 use rand::{thread_rng, RngCore};
 
-use crate::core::actor::actor_path::ActorPathBehavior;
-use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorRef, AnyActorWriter, SysTell};
 
 pub mod actor_cell_reader;
