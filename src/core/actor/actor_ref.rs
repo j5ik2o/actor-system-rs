@@ -133,12 +133,12 @@ impl SysTell for UntypedActorRef {
 }
 
 #[derive(Debug, Clone)]
-pub struct ActorRef<M: Message> {
+pub struct TypedActorRef<M: Message> {
   inner: ActorRefInner,
   p: PhantomData<M>,
 }
 
-impl<M: Message> ActorRef<M> {
+impl<M: Message> TypedActorRef<M> {
   pub fn new(actor_context_ref: ActorContextRef, path: ActorPath) -> Self {
     Self {
       inner: ActorRefInner {
@@ -166,20 +166,20 @@ impl<M: Message> ActorRef<M> {
   }
 }
 
-impl<M: Message> std::fmt::Display for ActorRef<M> {
+impl<M: Message> std::fmt::Display for TypedActorRef<M> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.inner.path)
   }
 }
 
-impl<M: Message> PartialEq for ActorRef<M> {
+impl<M: Message> PartialEq for TypedActorRef<M> {
   fn eq(&self, other: &Self) -> bool {
     self.inner.path == other.inner.path
   }
 }
 
 #[async_trait::async_trait]
-impl<M: Message> AnyActorRef for ActorRef<M> {
+impl<M: Message> AnyActorRef for TypedActorRef<M> {
   fn path(&self) -> &ActorPath {
     &self.inner.path
   }
@@ -196,7 +196,7 @@ impl<M: Message> AnyActorRef for ActorRef<M> {
 }
 
 #[async_trait::async_trait]
-impl<M: Message> SysTell for ActorRef<M> {
+impl<M: Message> SysTell for TypedActorRef<M> {
   async fn sys_tell(&self, message: SystemMessage) {
     let actor_context = self.inner.get_actor_context().await;
     {

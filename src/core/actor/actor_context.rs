@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
 use crate::core::actor::actor_cell::actor_cell_writer::ActorCellWriter;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::{TypedActorRef, UntypedActorRef};
 use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
@@ -169,7 +169,7 @@ impl ActorContext {
     inner_lock.dispatcher.clone()
   }
 
-  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> ActorRef<B::M> {
+  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> TypedActorRef<B::M> {
     let child_actor = props.create();
     let terminate_notify = Arc::new(Notify::new());
     let mut mailbox = Mailbox::new().await;
@@ -183,7 +183,7 @@ impl ActorContext {
     let parent_path = self.get_parent_path().await;
     let child_actor_path = ActorPath::of_child(parent_path, name, 0);
     let parent_context_ref = self.actor_context_ref();
-    let mut child_actor_ref = ActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
+    let mut child_actor_ref = TypedActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
 
     child_actor_ref.set_actor_cell_writer(child_actor_writer_arc.clone());
 

@@ -34,6 +34,10 @@ impl DeathWatch {
     actor_context
   }
 
+  async fn self_ref(&self) -> UntypedActorRef {
+    self.get_actor_context().await.self_ref().await
+  }
+
   fn is_terminating(&self) -> bool {
     todo!()
   }
@@ -55,15 +59,26 @@ impl DeathWatch {
     }
   }
 
+  async fn send_terminated(&self, if_local: bool, watcher: UntypedActorRef) {
+    // if watcher.is_local() == if_local {
+    //
+    // }
+  }
+  pub(crate) async fn tell_watchers_we_died(&self) {
+    if !self.watched_by.is_empty() {
+
+    }
+  }
+
   pub async fn watch(&mut self, subject: UntypedActorRef) -> UntypedActorRef {
-    let self_ref = self.get_actor_context().await.self_ref().await;
+    let self_ref = self.self_ref().await;
     if subject != self_ref {
       if !self.watching.contains_key(&subject) {
         subject
-          .sys_tell(SystemMessage::Watch {
-            watchee: self_ref.clone(),
-            watcher: self_ref.clone(),
-          })
+          .sys_tell(SystemMessage::watch(
+            self_ref.clone(),
+            self_ref.clone(),
+          ))
           .await;
         self.update_watching(&subject, None).await;
       } else {
@@ -78,10 +93,10 @@ impl DeathWatch {
     if subject != self_ref {
       if self.watching.contains_key(&subject) {
         subject
-          .sys_tell(SystemMessage::Unwatch {
-            watchee: self_ref.clone(),
-            watcher: self_ref.clone(),
-          })
+          .sys_tell(SystemMessage::unwatch(
+            self_ref.clone(),
+            self_ref,
+          ))
           .await;
         self.watching.remove(&subject);
       }
@@ -132,8 +147,8 @@ impl DeathWatch {
     } else {
       panic!(
         "Invalid add_watcher: watchee = {}, watcher = {}",
-        watchee.path(),
-        watcher.path()
+        watchee,
+        watcher
       );
     }
   }

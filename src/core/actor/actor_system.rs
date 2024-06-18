@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{ActorRef, UntypedActorRef};
+use crate::core::actor::actor_ref::{TypedActorRef, UntypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, SysTell};
@@ -79,7 +79,7 @@ impl ActorSystem {
     }
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> ActorRef<A::M> {
+  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> TypedActorRef<A::M> {
     let inner_lock = self.inner.lock().await;
     inner_lock.actor_context.actor_of(props, name).await
   }
