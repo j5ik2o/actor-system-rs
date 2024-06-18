@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use tokio::sync::Notify;
 
-use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::UntypedActorRef;
-use crate::core::actor::supervisor_strategy::SupervisorStrategy;
-use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
+use crate::core::actor::{ActorError, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
