@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{TypedActorRef, LocalActorRef, InternalActorRef};
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorRef};
 use crate::core::actor::address::Address;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, SysTell};

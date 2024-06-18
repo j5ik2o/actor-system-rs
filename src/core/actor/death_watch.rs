@@ -64,10 +64,9 @@ impl DeathWatch {
     //
     // }
   }
-  pub(crate) async fn tell_watchers_we_died(&self) {
-    if !self.watched_by.is_empty() {
 
-    }
+  pub(crate) async fn tell_watchers_we_died(&self) {
+    if !self.watched_by.is_empty() {}
   }
 
   pub async fn watch(&mut self, subject: InternalActorRef) -> InternalActorRef {
@@ -75,10 +74,7 @@ impl DeathWatch {
     if subject != self_ref {
       if !self.watching.contains_key(&subject) {
         subject
-          .sys_tell(SystemMessage::watch(
-            self_ref.clone(),
-            self_ref.clone(),
-          ))
+          .sys_tell(SystemMessage::watch(self_ref.clone(), self_ref.clone()))
           .await;
         self.update_watching(&subject, None).await;
       } else {
@@ -93,10 +89,7 @@ impl DeathWatch {
     if subject != self_ref {
       if self.watching.contains_key(&subject) {
         subject
-          .sys_tell(SystemMessage::unwatch(
-            self_ref.clone(),
-            self_ref,
-          ))
+          .sys_tell(SystemMessage::unwatch(self_ref.clone(), self_ref))
           .await;
         self.watching.remove(&subject);
       }
@@ -145,11 +138,7 @@ impl DeathWatch {
     } else if !watchee_self && watcher_self {
       self.watch(watchee).await;
     } else {
-      panic!(
-        "Invalid add_watcher: watchee = {}, watcher = {}",
-        watchee,
-        watcher
-      );
+      panic!("Invalid add_watcher: watchee = {}, watcher = {}", watchee, watcher);
     }
   }
 

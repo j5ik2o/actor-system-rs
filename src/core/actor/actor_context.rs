@@ -6,7 +6,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
 use crate::core::actor::actor_cell::actor_cell_writer::ActorCellWriter;
 use crate::core::actor::actor_path::ActorPath;
-use crate::core::actor::actor_ref::{TypedActorRef, LocalActorRef, InternalActorRef};
+use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorRef};
 use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
