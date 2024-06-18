@@ -22,6 +22,7 @@ pub mod address;
 mod death_watch;
 pub mod props;
 pub mod supervisor_strategy;
+mod typed_actor_context;
 
 pub type ActorError = Box<dyn Error + Send + Sync + 'static>;
 

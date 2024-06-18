@@ -35,7 +35,7 @@ impl DeathWatch {
   }
 
   async fn self_ref(&self) -> InternalActorRef {
-    self.get_actor_context().await.self_ref().await
+    self.get_actor_context().await.internal_self_ref().await
   }
 
   fn is_terminating(&self) -> bool {
@@ -85,7 +85,13 @@ impl DeathWatch {
   }
 
   pub async fn unwatch(&mut self, subject: InternalActorRef) -> InternalActorRef {
-    let self_ref = self.actor_context_ref.upgrade().await.unwrap().self_ref().await;
+    let self_ref = self
+      .actor_context_ref
+      .upgrade()
+      .await
+      .unwrap()
+      .internal_self_ref()
+      .await;
     if subject != self_ref {
       if self.watching.contains_key(&subject) {
         subject
@@ -110,7 +116,7 @@ impl DeathWatch {
       if !self.is_terminating() {
         actor
           .tell_any(AnyMessage::new(AutoReceivedMessage::Terminated {
-            actor: actor_context.self_ref().await,
+            actor: actor_context.internal_self_ref().await,
             existence_confirmed,
             address_terminated,
           }))
@@ -127,7 +133,7 @@ impl DeathWatch {
   }
 
   pub async fn add_watcher(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
-    let self_ref = self.get_actor_context().await.self_ref().await;
+    let self_ref = self.get_actor_context().await.internal_self_ref().await;
     let watchee_self = watchee == self_ref;
     let watcher_self = watcher == self_ref;
 
@@ -143,7 +149,7 @@ impl DeathWatch {
   }
 
   pub async fn rem_watcher(&mut self, watchee: InternalActorRef, watcher: InternalActorRef) {
-    let self_ref = self.get_actor_context().await.self_ref().await;
+    let self_ref = self.get_actor_context().await.internal_self_ref().await;
     let watchee_self = watchee == self_ref;
     let watcher_self = watcher == self_ref;
 

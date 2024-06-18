@@ -131,7 +131,7 @@ impl ActorContext {
     let child_contexts_mg = lock.child_contexts.lock().await;
     let mut result = vec![];
     for (_, ctx) in child_contexts_mg.iter() {
-      result.push(ctx.self_ref().await);
+      result.push(ctx.internal_self_ref().await);
     }
     result
   }
@@ -148,7 +148,7 @@ impl ActorContext {
     inner_lock.self_ref.path().clone()
   }
 
-  pub async fn self_ref(&self) -> InternalActorRef {
+  pub async fn internal_self_ref(&self) -> InternalActorRef {
     let inner_lock = self.inner.lock().await;
     inner_lock.self_ref.clone()
   }

@@ -41,7 +41,7 @@ impl ActorCellWriter {
 #[async_trait::async_trait]
 impl AnyActorWriter for ActorCellWriter {
   async fn path(&self) -> ActorPath {
-    self.get_actor_context().await.self_ref().await.path().clone()
+    self.get_actor_context().await.internal_self_ref().await.path().clone()
   }
 
   fn set_actor_context_ref(&mut self, actor_context_ref: ActorContextRef) {
@@ -51,7 +51,7 @@ impl AnyActorWriter for ActorCellWriter {
   async fn get_parent(&self) -> Option<InternalActorRef> {
     let result = self.get_actor_context().await.get_parent_context().await;
     match result {
-      Some(parent_context) => Some(parent_context.self_ref().await.clone()),
+      Some(parent_context) => Some(parent_context.internal_self_ref().await.clone()),
       None => None,
     }
   }

@@ -15,6 +15,28 @@ pub enum InternalActorRef {
   Ignore,
 }
 
+impl InternalActorRef {
+  pub fn new_local(actor_ref: LocalActorRef) -> Self {
+    InternalActorRef::Local(actor_ref)
+  }
+
+  pub fn new_ignore() -> Self {
+    InternalActorRef::Ignore
+  }
+
+  pub fn to_typed<M: Message>(&self) -> TypedActorRef<M> {
+    match self {
+      InternalActorRef::Local(ref actor_ref) => {
+        let actor_context_ref = actor_ref.inner.get_actor_context_ref();
+        let mut result = TypedActorRef::new(actor_context_ref, actor_ref.inner.path.clone());
+        result.set_actor_cell_writer(actor_ref.inner.get_actor_cell_writer());
+        result
+      }
+      InternalActorRef::Ignore => panic!("InternalActorRef::to_typed: not supported"),
+    }
+  }
+}
+
 impl std::fmt::Display for InternalActorRef {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {

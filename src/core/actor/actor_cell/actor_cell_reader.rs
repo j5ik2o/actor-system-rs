@@ -40,12 +40,12 @@ impl<A: Actor + 'static> ActorCellReader<A> {
   }
 
   async fn self_ref(&self) -> InternalActorRef {
-    self.get_actor_context().await.self_ref().await
+    self.get_actor_context().await.internal_self_ref().await
   }
 
   async fn suspend_self(&mut self) {
     let actor_context = self.get_actor_context().await;
-    let mut self_ref = actor_context.self_ref().await;
+    let mut self_ref = actor_context.internal_self_ref().await;
     self_ref.suspend().await;
   }
 
@@ -168,7 +168,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
         _ => None,
       };
       if let Some(parent_ref) = &parent_ref_opt {
-        let self_ref = self.get_actor_context().await.self_ref().await;
+        let self_ref = self.get_actor_context().await.internal_self_ref().await;
         parent_ref
           .tell_any(AnyMessage::new(AutoReceivedMessage::terminated(self_ref, false, false)))
           .await;
@@ -195,13 +195,13 @@ impl<A: Actor + 'static> ActorCellReader<A> {
 #[async_trait]
 impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn path(&self) -> ActorPath {
-    self.get_actor_context().await.self_ref().await.path().clone()
+    self.get_actor_context().await.internal_self_ref().await.path().clone()
   }
 
   async fn get_parent(&self) -> Option<InternalActorRef> {
     let result = self.get_actor_context().await.get_parent_context().await;
     match result {
-      Some(parent_context) => Some(parent_context.self_ref().await.clone()),
+      Some(parent_context) => Some(parent_context.internal_self_ref().await.clone()),
       None => None,
     }
   }

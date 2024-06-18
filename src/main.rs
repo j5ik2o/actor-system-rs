@@ -39,7 +39,7 @@ impl Actor for MyActor {
 
   async fn all_children_terminated(&mut self, ctx: ActorContext) {
     log::debug!("all_children_terminated: {}", ctx.self_path().await);
-    ctx.self_ref().await.stop().await;
+    ctx.internal_self_ref().await.stop().await;
   }
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), ActorError> {
@@ -74,7 +74,7 @@ impl Actor for EchoActor {
 
   async fn receive(&mut self, ctx: ActorContext, message: Self::M) -> Result<(), ActorError> {
     log::debug!("receive: a message on {}, {:?}", ctx.self_path().await, message);
-    ctx.self_ref().await.stop().await;
+    ctx.internal_self_ref().await.stop().await;
     // ctx.terminate_system().await;
     Ok(())
   }
