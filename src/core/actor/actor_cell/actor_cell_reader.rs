@@ -13,7 +13,7 @@ use tokio::sync::Notify;
 
 #[derive(Debug)]
 pub struct ActorCellReader<A: Actor> {
-  actor: A,
+  actor_opt: Option<A>,
   mailbox: Mailbox,
   actor_context_ref_opt: Option<ActorContextRef>,
   terminate_notify: Arc<Notify>,
@@ -22,11 +22,19 @@ pub struct ActorCellReader<A: Actor> {
 impl<A: Actor + 'static> ActorCellReader<A> {
   pub fn new(actor: A, mailbox: Mailbox, terminate_notify: Arc<Notify>) -> Self {
     Self {
-      actor,
+      actor_opt: Some(actor),
       mailbox,
       actor_context_ref_opt: None,
       terminate_notify,
     }
+  }
+
+  fn actor(&self) -> &A {
+    self.actor_opt.as_ref().unwrap()
+  }
+
+  fn actor_mut(&mut self) -> &mut A {
+    self.actor_opt.as_mut().unwrap()
   }
 
   fn get_actor_context_ref(&self) -> ActorContextRef {
@@ -80,7 +88,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.path().await,
       self.mailbox.is_suspend().await
     );
-    self.actor.around_pre_start(actor_context).await;
+    self.actor_mut().around_pre_start(actor_context).await;
   }
 
   async fn handle_suspend(&mut self) {
@@ -132,7 +140,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.mailbox.is_suspend().await
     );
     if !self
-      .actor
+      .actor()
       .supervisor_strategy()
       .await
       .handle_failure(actor_context, false, child_ref.clone(), cause.clone(), vec![])
@@ -149,6 +157,13 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.path().await,
       self.mailbox.is_suspend().await
     );
+    if self.actor_opt.is_none() {
+      self.handle_create().await;
+    } else {
+      if self.actor_opt.is_some() {
+
+      }
+    }
   }
 
   async fn handle_terminated(&mut self) {
@@ -173,7 +188,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
           .tell_any(AnyMessage::new(AutoReceivedMessage::terminated(self_ref, false, false)))
           .await;
       }
-      self.actor.around_post_stop(actor_context.clone()).await;
+      self.actor_mut().around_post_stop(actor_context.clone()).await;
       self.mailbox.become_closed().await;
       if parent_ref_opt.is_none() {
         self.terminate_notify.notify_waiters();
@@ -214,16 +229,16 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
     log::debug!("child_terminated: {}", child.path());
     let actor_context = self.get_actor_context().await;
     actor_context.remove_child(child.path()).await;
-    self.actor.child_terminated(actor_context.clone(), child).await;
+    self.actor_mut().child_terminated(actor_context.clone(), child).await;
     if actor_context.is_child_empty().await {
-      self.actor.all_children_terminated(actor_context.clone()).await;
+      self.actor_mut().all_children_terminated(actor_context.clone()).await;
     }
   }
 
   async fn invoke(&mut self, mut message: AnyMessage) {
     if let Ok(message) = message.take::<A::M>() {
       let actor_context = self.get_actor_context().await;
-      if let Err(error) = self.actor.receive(actor_context, message).await {
+      if let Err(error) = self.actor_mut().receive(actor_context, message).await {
         self.handle_invoke_failure(Arc::new(error)).await;
       }
     }
