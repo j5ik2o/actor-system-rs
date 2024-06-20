@@ -138,9 +138,9 @@ impl ActorContext {
     lock.children_refs = lock.children_refs.remove(child).await;
   }
 
-  pub async fn get_child_refs(&self) -> Vec<InternalActorRef> {
+  pub async fn get_child_refs(&self) -> ChildrenRefs {
     let lock = self.inner.lock().await;
-    lock.children_refs.children().await
+    lock.children_refs.clone()
   }
 
   pub async fn terminate_system(&self) {

@@ -6,6 +6,7 @@ use crate::core::actor::actor_context::ActorContext;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorRef};
 use crate::core::actor::address::Address;
+use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, SysTell};
 use crate::core::dispatch::dispatcher::Dispatcher;
@@ -92,7 +93,7 @@ impl ActorSystem {
   pub async fn when_terminated(&self) {
     let actor_context = self.get_actor_context().await;
     let child_refs = actor_context.get_child_refs().await;
-    for child_ref in child_refs {
+    for child_ref in child_refs.children().await {
       child_ref.when_terminated().await
     }
   }
@@ -100,7 +101,7 @@ impl ActorSystem {
   pub async fn terminate(&self) {
     let actor_context = self.get_actor_context().await;
     let child_refs = actor_context.get_child_refs().await;
-    for mut child_ref in child_refs {
+    for mut child_ref in child_refs.children().await {
       child_ref.stop().await
     }
   }

@@ -38,12 +38,30 @@ pub trait Actor: Debug + Send + Sync {
   async fn around_pre_start(&mut self, ctx: ActorContext) {
     self.pre_start(ctx).await;
   }
+
   async fn pre_start(&mut self, ctx: ActorContext) {
-    log::debug!("pre_start: {}", ctx.self_path().await);
+    log::debug!("pre_start: path = {}", ctx.self_path().await);
+  }
+
+  async fn around_pre_restart(&mut self, ctx: ActorContext, cause: Arc<ActorError>, message: Option<Self::M>) {
+    self.post_restart(ctx, cause, message).await;
+  }
+
+  async fn post_restart(&mut self, ctx: ActorContext, cause: Arc<ActorError>, message: Option<Self::M>) {
+    log::debug!(
+      "post_restart: path = {}, cause = {}, message = {:?}",
+      ctx.self_path().await,
+      cause,
+      message
+    );
   }
 
   async fn child_terminated(&mut self, ctx: ActorContext, child: InternalActorRef) {
-    log::debug!("child_terminated: {}, {}", ctx.self_path().await, child.path());
+    log::debug!(
+      "child_terminated: path = {}, child_path = {}",
+      ctx.self_path().await,
+      child.path()
+    );
   }
 
   async fn all_children_terminated(&mut self, ctx: ActorContext) {
@@ -84,14 +102,10 @@ pub trait AnyActorReader: Debug + Send + Sync {
   fn set_actor_context_ref(&mut self, actor_cells: ActorContextRef);
   async fn path(&self) -> ActorPath;
   async fn get_parent(&self) -> Option<InternalActorRef>;
-
   async fn child_terminated(&mut self, child: InternalActorRef);
-
   async fn invoke(&mut self, message: AnyMessage);
   async fn system_invoke(&mut self, system_message: SystemMessage);
-
   fn supervisor_strategy(&self) -> Arc<Box<dyn SupervisorStrategy>>;
-
   async fn get_terminate_notify(&self) -> Arc<Notify>;
 }
 
@@ -108,7 +122,7 @@ pub trait AnyActorRef: Debug + PartialEq {
 pub trait SysTell: AnyActorRef {
   async fn sys_tell(&self, message: SystemMessage);
   async fn start(&mut self) {
-    self.sys_tell(SystemMessage::Create).await;
+    self.sys_tell(SystemMessage::create()).await;
   }
   async fn stop(&mut self) {
     self.sys_tell(SystemMessage::Terminate).await;
@@ -126,6 +140,5 @@ pub trait SysTell: AnyActorRef {
   async fn restart(&mut self, cause: Arc<ActorError>) {
     self.sys_tell(SystemMessage::Recreate { cause }).await;
   }
-
   async fn when_terminated(&self);
 }

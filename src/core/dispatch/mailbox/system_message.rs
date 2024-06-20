@@ -7,7 +7,9 @@ use crate::core::util::element::Element;
 
 #[derive(Debug, Clone)]
 pub enum SystemMessage {
-  Create,
+  Create {
+    failure: Option<Arc<ActorError>>,
+  },
   Recreate {
     cause: Arc<ActorError>,
   },
@@ -41,7 +43,7 @@ unsafe impl Sync for SystemMessage {}
 
 impl SystemMessage {
   pub fn create() -> Self {
-    Self::Create
+    Self::Create { failure: None }
   }
 
   pub fn recreate(cause: Arc<ActorError>) -> Self {

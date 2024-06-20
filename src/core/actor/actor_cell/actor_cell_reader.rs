@@ -1,6 +1,7 @@
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
+use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::supervisor_strategy::SupervisorStrategy;
 use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
@@ -11,12 +12,21 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
+#[derive(Debug, Clone)]
+pub enum FailedInfo {
+  NoFailedInfo,
+  FailedRef(InternalActorRef),
+  FailedFatally,
+}
+
 #[derive(Debug)]
 pub struct ActorCellReader<A: Actor> {
   actor_opt: Option<A>,
   mailbox: Mailbox,
   actor_context_ref_opt: Option<ActorContextRef>,
   terminate_notify: Arc<Notify>,
+  failed_info: FailedInfo,
+  current_message: Option<AnyMessage>,
 }
 
 impl<A: Actor + 'static> ActorCellReader<A> {
@@ -26,6 +36,40 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       mailbox,
       actor_context_ref_opt: None,
       terminate_notify,
+      failed_info: FailedInfo::NoFailedInfo,
+      current_message: None,
+    }
+  }
+
+  fn is_failed(&self) -> bool {
+    match self.failed_info {
+      FailedInfo::FailedRef(_) => true,
+      _ => false,
+    }
+  }
+
+  fn is_failed_fatally(&self) -> bool {
+    match self.failed_info {
+      FailedInfo::FailedFatally => true,
+      _ => false,
+    }
+  }
+
+  fn set_field(&mut self, child_ref: InternalActorRef) {
+    self.failed_info = match self.failed_info {
+      FailedInfo::FailedFatally => FailedInfo::FailedFatally,
+      _ => FailedInfo::FailedRef(child_ref),
+    }
+  }
+
+  fn set_failed_fatally(&mut self) {
+    self.failed_info = FailedInfo::FailedFatally;
+  }
+
+  fn clear_failed(&mut self) {
+    self.failed_info = match &self.failed_info {
+      FailedInfo::FailedRef(_) => FailedInfo::NoFailedInfo,
+      other => other.clone(),
     }
   }
 
@@ -60,7 +104,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
   async fn suspend_children(&mut self) {
     let actor_context = self.get_actor_context().await;
     let child_refs = actor_context.get_child_refs().await;
-    for mut child_ref in child_refs {
+    for mut child_ref in child_refs.children().await.iter_mut() {
       child_ref.suspend().await;
     }
   }
@@ -81,7 +125,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     }
   }
 
-  async fn handle_create(&mut self) {
+  async fn handle_create(&mut self, cause: Option<Arc<ActorError>>) {
     let actor_context = self.get_actor_context().await;
     log::debug!(
       "Create: path = {}, suspend = {}",
@@ -150,6 +194,15 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     }
   }
 
+  async fn failed_create(&mut self) {
+    // children.foreach(stop)
+    self.finish_create().await;
+  }
+
+  async fn finish_create(&mut self) {}
+
+  async fn finish_recreate(&mut self) {}
+
   async fn handle_recreate(&mut self, cause: Arc<ActorError>) {
     log::debug!(
       "Recreate: cause = {}, path = {}, suspend = {}",
@@ -157,10 +210,28 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.path().await,
       self.mailbox.is_suspend().await
     );
+    let actor_context = self.get_actor_context().await;
     if self.actor_opt.is_none() {
-      self.handle_create().await;
+      self.failed_create().await;
+    } else if actor_context.get_child_refs().await.is_normal().await {
+      let failed_actor = &self.actor_opt;
+      if failed_actor.is_some() {
+        if !self.is_failed_fatally() {
+          let msg = match &mut self.current_message {
+            Some(msg) => Some(msg.take::<A::M>().unwrap()),
+            None => None,
+          };
+          self
+            .actor_opt
+            .as_mut()
+            .unwrap()
+            .around_pre_restart(actor_context, cause, msg)
+            .await;
+        }
+      }
+      self.finish_recreate().await;
     } else {
-      if self.actor_opt.is_some() {}
+      self.handle_resume(cause).await;
     }
   }
 
@@ -172,7 +243,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.mailbox.is_suspend().await
     );
     if !actor_context.is_child_empty().await {
-      for mut child in actor_context.get_child_refs().await {
+      for mut child in actor_context.get_child_refs().await.children().await {
         child.stop().await;
       }
     } else {
@@ -245,7 +316,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn system_invoke(&mut self, mut system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
     match system_message {
-      SystemMessage::Create => self.handle_create().await,
+      SystemMessage::Create { failure } => self.handle_create(failure.clone()).await,
       SystemMessage::Recreate { cause } => self.handle_recreate(cause).await,
       SystemMessage::Suspend => self.handle_suspend().await,
       SystemMessage::Resume {
