@@ -4,7 +4,7 @@ use crate::core::dispatch::any_message::AnyMessage;
 #[derive(Debug, Clone)]
 pub struct Envelope {
   pub message: AnyMessage,
-  pub sender: InternalActorRef
+  pub sender: InternalActorRef,
 }
 
 impl Envelope {

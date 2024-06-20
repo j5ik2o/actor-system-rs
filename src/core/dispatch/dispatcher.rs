@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
+use crate::core::actor::Actor;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
-use crate::core::actor::Actor;
-use crate::core::actor::actor_cell::actor_cell_reader::ActorCellReader;
 
 use crate::core::dispatch::mailbox::Mailbox;
 

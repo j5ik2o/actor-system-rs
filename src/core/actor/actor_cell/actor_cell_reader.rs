@@ -3,17 +3,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::Notify;
 
-use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, SysTell};
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::supervisor_strategy::SupervisorStrategy;
+use crate::core::actor::{Actor, ActorError, AnyActorReader, AnyActorRef, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::envelope::Envelope;
-use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
+use crate::core::dispatch::mailbox::Mailbox;
 use crate::core::dispatch::message::AutoReceivedMessage;
 
 #[derive(Debug, Clone)]
@@ -135,7 +135,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     if !self.is_failed() {
       self.suspend_self().await;
       match &self.current_message {
-        Some(Envelope{ sender, .. }) => {
+        Some(Envelope { sender, .. }) => {
           self.set_field(sender.clone());
         }
         _ => {
@@ -147,7 +147,6 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.stop_children().await;
       // finish_terminate()
     }
-
   }
 
   async fn send_failed_message(&mut self, cause: Arc<ActorError>) {
@@ -157,8 +156,8 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     };
     if let Some(parent_ref) = &mut parent_ref_opt {
       parent_ref
-          .sys_tell(SystemMessage::failed(self.self_ref().await, cause))
-          .await;
+        .sys_tell(SystemMessage::failed(self.self_ref().await, cause))
+        .await;
     }
   }
 
@@ -256,7 +255,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       if failed_actor.is_some() {
         if !self.is_failed_fatally() {
           let msg = match &mut self.current_message {
-            Some(Envelope{ message: msg , ..}) => Some(msg.take::<A::M>().unwrap()),
+            Some(Envelope { message: msg, .. }) => Some(msg.take::<A::M>().unwrap()),
             None => None,
           };
           self
@@ -308,8 +307,8 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     if let Some(parent_ref) = &parent_ref_opt {
       let self_ref = self.get_actor_context().await.internal_self_ref().await;
       parent_ref
-          .tell_any(AnyMessage::new(AutoReceivedMessage::terminated(self_ref, false, false)))
-          .await;
+        .tell_any(AnyMessage::new(AutoReceivedMessage::terminated(self_ref, false, false)))
+        .await;
     }
     parent_ref_opt
   }
