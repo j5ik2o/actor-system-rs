@@ -331,7 +331,7 @@ impl Mailbox {
     }
   }
 
-  async fn clean_up(&self) {
+  pub(crate) async fn clean_up(&self) {
     self.message_queue.reader().clean_up().await;
     self.system_message_queue.reader().clean_up().await;
   }

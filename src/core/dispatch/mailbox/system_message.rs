@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
 use crate::core::actor::ActorError;
+use crate::core::dispatch::message::{AutoReceivedMessage, Message};
 use crate::core::util::element::Element;
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,7 @@ pub enum SystemMessage {
 }
 
 impl Element for SystemMessage {}
+impl Message for SystemMessage {}
 
 unsafe impl Send for SystemMessage {}
 unsafe impl Sync for SystemMessage {}
