@@ -160,9 +160,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     if self.actor_opt.is_none() {
       self.handle_create().await;
     } else {
-      if self.actor_opt.is_some() {
-
-      }
+      if self.actor_opt.is_some() {}
     }
   }
 
