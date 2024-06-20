@@ -122,6 +122,22 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     self.get_actor_context().await.internal_self_ref().await
   }
 
+  async fn send_failed_message(&mut self, cause: Arc<ActorError>) {
+    let mut parent_ref_opt = match self.get_parent().await {
+      Some(parent_ref) => Some(parent_ref),
+      _ => None,
+    };
+    if let Some(parent_ref) = &mut parent_ref_opt {
+      parent_ref
+        .sys_tell(SystemMessage::failed(self.self_ref().await, cause))
+        .await;
+    }
+  }
+
+  fn new_actor(&self) -> A {
+    self.props.create()
+  }
+
   async fn suspend_self(&mut self) {
     let actor_context = self.get_actor_context().await;
     let mut self_ref = actor_context.internal_self_ref().await;
@@ -166,6 +182,8 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     self.get_dispatcher().await.resume(self).await;
   }
 
+  // ---
+
   async fn handle_invoke_failure(&mut self, cause: Arc<ActorError>) {
     log::error!("handle_invoke_failure: {:?}", cause);
     if !self.is_failed() {
@@ -185,23 +203,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     }
   }
 
-  async fn send_failed_message(&mut self, cause: Arc<ActorError>) {
-    let mut parent_ref_opt = match self.get_parent().await {
-      Some(parent_ref) => Some(parent_ref),
-      _ => None,
-    };
-    if let Some(parent_ref) = &mut parent_ref_opt {
-      parent_ref
-        .sys_tell(SystemMessage::failed(self.self_ref().await, cause))
-        .await;
-    }
-  }
-
-  fn new_actor(&self) -> A {
-    self.props.create()
-  }
-
-  async fn create(&mut self, cause: Option<Arc<ActorError>>) {
+  async fn create(&mut self, cause: Option<Arc<ActorError>>) -> Result<(), Arc<ActorError>> {
     let actor_context = self.get_actor_context().await;
     log::debug!(
       "Create: path = {}, suspend = {}",
@@ -213,9 +215,13 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       self.set_failed_fatally();
       self.actor_opt = None;
     }
+    if cause.is_some() {
+      return Err(cause.unwrap());
+    }
     // cause -> return Err(cause)
     self.actor_opt = Some(self.new_actor());
     self.actor_mut().around_pre_start(actor_context).await;
+    Ok(())
   }
 
   async fn fault_suspend(&mut self) {
@@ -303,8 +309,12 @@ impl<A: Actor + 'static> ActorCellReader<A> {
   async fn finish_create(&mut self) {
     self.resume_non_recursive().await;
     self.clear_failed();
-    self.create(None).await;
-    // TODO: self.handle_invoke_failure(...).await;
+    match self.create(None).await {
+      Ok(_) => {}
+      Err(cause) => {
+        self.handle_invoke_failure(cause).await;
+      }
+    }
   }
 
   async fn finish_recreate(&mut self, cause: Arc<ActorError>) {
@@ -459,7 +469,9 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn system_invoke(&mut self, mut system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
     match system_message {
-      SystemMessage::Create { failure } => self.create(failure).await,
+      SystemMessage::Create { failure } => {
+        let _ = self.create(failure).await.unwrap();
+      }
       SystemMessage::Recreate { cause } => self.fault_recreate(cause).await,
       SystemMessage::Suspend => self.fault_suspend().await,
       SystemMessage::Resume {
