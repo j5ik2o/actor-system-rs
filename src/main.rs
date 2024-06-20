@@ -47,7 +47,7 @@ impl Actor for MyActor {
     if message.value == self.answer {
       log::debug!("receive: the answer to life, the universe, and everything");
     }
-    let child = ctx.actor_of(Props::new(|| EchoActor::new(1)), "echo").await;
+    let child = ctx.actor_of(Props::new(|| EchoActor::new(1))).await;
     child.tell(MyMessage { value: 1 }).await;
     Ok(())
   }
@@ -87,7 +87,7 @@ async fn main() {
 
   let mut system = ActorSystem::new().await;
   let props = Props::new(|| MyActor::new(42));
-  let actor_ref = system.actor_of(props, "actor1").await;
+  let actor_ref = system.actor_of(props).await;
   tokio::spawn(async move {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     actor_ref.tell(MyMessage { value: 42 }).await;

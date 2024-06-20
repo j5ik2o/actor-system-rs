@@ -226,7 +226,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn child_terminated(&mut self, child: InternalActorRef) {
     log::debug!("child_terminated: {}", child.path());
     let actor_context = self.get_actor_context().await;
-    actor_context.remove_child(child.path()).await;
+    actor_context.remove_child(child.clone()).await;
     self.actor_mut().child_terminated(actor_context.clone(), child).await;
     if actor_context.is_child_empty().await {
       self.actor_mut().all_children_terminated(actor_context.clone()).await;

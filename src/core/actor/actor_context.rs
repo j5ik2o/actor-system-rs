@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use base64_string_rs::Base64StringFactory;
+use rand::RngCore;
 
 use tokio::sync::{Mutex, Notify};
 
@@ -10,6 +12,9 @@ use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorR
 use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
 use crate::core::actor::props::Props;
 use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
+use crate::core::actor::children::child_restart_stats::ChildRestartStats;
+use crate::core::actor::children::children_container::ChildrenContainer;
+use crate::core::actor::children::children_refs::ChildrenRefs;
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -21,6 +26,7 @@ pub struct ActorContextInner {
   child_readers: Arc<Mutex<HashMap<ActorPath, AnyActorReaderArc>>>,
   child_contexts: Arc<Mutex<HashMap<ActorPath, ActorContext>>>,
   dispatcher: Dispatcher,
+  children_refs: ChildrenRefs,
   actor_system_ref: Option<ActorSystemRef>,
 }
 
@@ -36,6 +42,7 @@ impl std::fmt::Debug for ActorContextInner {
       .field("child_readers", &self.child_readers)
       .field("child_contexts", &self.child_contexts)
       .field("dispatcher", &self.dispatcher)
+      .field("children_refs", &self.children_refs)
       .field("actor_system_ref", &self.actor_system_ref)
       .finish()
   }
@@ -78,6 +85,7 @@ impl ActorContext {
         child_readers: Arc::new(Mutex::new(HashMap::new())),
         child_contexts: Arc::new(Mutex::new(HashMap::new())),
         dispatcher,
+        children_refs: ChildrenRefs::empty(),
         actor_system_ref: None,
       })),
     }
@@ -114,29 +122,26 @@ impl ActorContext {
     children_lock.is_empty()
   }
 
-  pub async fn get_children(&self) -> Vec<AnyActorWriterArc> {
+  pub async fn get_actor_cell_writer(&self) -> Vec<AnyActorWriterArc> {
     let lock = self.inner.lock().await;
     let children_lock = lock.child_writers.lock().await;
     children_lock.values().cloned().collect()
   }
 
-  pub async fn remove_child(&self, path: &ActorPath) -> Option<AnyActorWriterArc> {
-    let lock = self.inner.lock().await;
-    let mut children_lock = lock.child_writers.lock().await;
-    children_lock.remove(path)
+  pub async fn remove_child(&self, child: InternalActorRef) {
+    {
+      let mut lock = self.inner.lock().await;
+      let mut children_lock = lock.child_writers.lock().await;
+      children_lock.remove(child.path());
+    }
+    let mut lock = self.inner.lock().await;
+    lock.children_refs = lock.children_refs.remove(child).await;
   }
 
   pub async fn get_child_refs(&self) -> Vec<InternalActorRef> {
     let lock = self.inner.lock().await;
-    let child_contexts_mg = lock.child_contexts.lock().await;
-    let mut result = vec![];
-    for (_, ctx) in child_contexts_mg.iter() {
-      result.push(ctx.internal_self_ref().await);
-    }
-    result
+    lock.children_refs.children().await
   }
-
-  pub async fn stop_actor(&self, _untyped_actor_ref: LocalActorRef) {}
 
   pub async fn terminate_system(&self) {
     let actor_system = self.get_actor_system().await;
@@ -169,7 +174,13 @@ impl ActorContext {
     inner_lock.dispatcher.clone()
   }
 
-  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> TypedActorRef<B::M> {
+  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>) -> TypedActorRef<B::M> {
+    let name = Self::random_name();
+    self.actor_of_with_name(props, &name).await
+  }
+
+  pub async fn actor_of_with_name<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> TypedActorRef<B::M> {
+    let name = Self::check_name(Some(name));
     let child_actor = props.create();
     let terminate_notify = Arc::new(Notify::new());
     let mut mailbox = Mailbox::new().await;
@@ -177,20 +188,20 @@ impl ActorContext {
     let child_actor_cell_reader = ActorCellReader::new(child_actor, mailbox.clone(), terminate_notify);
     let child_actor_writer_arc = Arc::new(Mutex::new(Box::new(child_actor_cell_writer) as Box<dyn AnyActorWriter>));
     let child_actor_reader_arc = Arc::new(Mutex::new(Box::new(child_actor_cell_reader) as Box<dyn AnyActorReader>));
-    mailbox.set_actor_writer(child_actor_writer_arc.clone()).await;
-    mailbox.set_actor_reader(child_actor_reader_arc.clone()).await;
+    mailbox.set_actor_cell_writer(child_actor_writer_arc.clone()).await;
+    mailbox.set_actor_cell_reader(child_actor_reader_arc.clone()).await;
 
     let parent_path = self.get_parent_path().await;
-    let child_actor_path = ActorPath::of_child(parent_path, name, 0);
+    let child_actor_path = ActorPath::of_child(parent_path, &name, 0);
     let parent_context_ref = self.actor_context_ref();
     let mut child_actor_ref = TypedActorRef::new(parent_context_ref.clone(), child_actor_path.clone());
 
     child_actor_ref.set_actor_cell_writer(child_actor_writer_arc.clone());
-
+    let internal_child_ref = child_actor_ref.to_untyped();
     let dispatcher = self.get_dispatcher().await;
     let child_context = ActorContext::new(
       Some(parent_context_ref.clone()),
-      child_actor_ref.to_untyped(),
+      internal_child_ref.clone(),
       dispatcher,
     );
     let actor_system_ref = self.get_actor_system_ref().await;
@@ -198,7 +209,7 @@ impl ActorContext {
 
     let child_context_ref = child_context.actor_context_ref();
     {
-      let inner_lock = self.inner.lock().await;
+      let mut inner_lock = self.inner.lock().await;
       {
         let mut children_mg = inner_lock.child_writers.lock().await;
         children_mg.insert(child_actor_path.clone(), child_actor_writer_arc.clone());
@@ -208,6 +219,7 @@ impl ActorContext {
         children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
       }
       {
+        inner_lock.children_refs = inner_lock.children_refs.add(ChildRestartStats::new(internal_child_ref)).await;
         let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
         child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
       }
@@ -236,5 +248,24 @@ impl ActorContext {
   pub(crate) async fn dispatch(&self) {
     let inner_lock = self.inner.lock().await;
     inner_lock.dispatcher.run().await;
+  }
+
+  fn random_name() -> String {
+    let mut rng = rand::thread_rng();
+    let value = rng.next_u64();
+    let factory = Base64StringFactory::new(true, false);
+    let base64_string = factory.encode_from_bytes(&value.to_be_bytes());
+    base64_string.to_value().to_string()
+  }
+
+  fn check_name(name: Option<&str>) -> String {
+    match name {
+      None => panic!("actor name must not be empty"),
+      Some("") => panic!("actor name must not be empty"),
+      Some(n) => {
+        ActorPath::validate_path_element(n);
+        n.to_string()
+      }
+    }
   }
 }

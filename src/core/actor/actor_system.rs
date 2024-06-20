@@ -79,9 +79,14 @@ impl ActorSystem {
     }
   }
 
-  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> TypedActorRef<A::M> {
+  pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>) -> TypedActorRef<A::M> {
     let inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.actor_of(props, name).await
+    inner_lock.actor_context.actor_of(props).await
+  }
+
+  pub async fn actor_of_with_name<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> TypedActorRef<A::M> {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.actor_context.actor_of_with_name(props, name).await
   }
 
   pub async fn when_terminated(&self) {

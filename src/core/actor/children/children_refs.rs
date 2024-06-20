@@ -434,22 +434,4 @@ impl ChildrenRefs {
     !self.is_empty().await
   }
 
-  fn random_name() -> String {
-    let mut rng = rand::thread_rng();
-    let value = rng.next_u64();
-    let factory = Base64StringFactory::new(true, false);
-    let base64_string = factory.encode_from_bytes(&value.to_be_bytes());
-    base64_string.to_string()
-  }
-
-  fn check_name(name: Option<&str>) -> String {
-    match name {
-      None => panic!("actor name must not be empty"),
-      Some("") => panic!("actor name must not be empty"),
-      Some(n) => {
-        ActorPath::validate_path_element(n);
-        n.to_string()
-      }
-    }
-  }
 }

@@ -56,9 +56,9 @@ impl AnyActorWriter for ActorCellWriter {
     }
   }
 
-  async fn get_children(&self) -> Vec<AnyActorWriterArc> {
+  async fn get_actor_cell_writer(&self) -> Vec<AnyActorWriterArc> {
     let actor_context = self.get_actor_context().await;
-    actor_context.get_children().await
+    actor_context.get_actor_cell_writer().await
   }
 
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>> {

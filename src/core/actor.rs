@@ -67,7 +67,7 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   async fn path(&self) -> ActorPath;
 
   async fn get_parent(&self) -> Option<InternalActorRef>;
-  async fn get_children(&self) -> Vec<AnyActorWriterArc>;
+  async fn get_actor_cell_writer(&self) -> Vec<AnyActorWriterArc>;
   async fn send_message(&self, message: AnyMessage) -> Result<(), QueueError<AnyMessage>>;
   async fn send_system_message(&self, system_message: SystemMessage) -> Result<(), QueueError<SystemMessage>>;
 

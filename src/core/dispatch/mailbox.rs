@@ -24,8 +24,8 @@ struct MailboxInner {
   throughput: usize,
   is_throughput_deadline_time_defined: Arc<AtomicBool>,
   throughput_deadline_time: Duration,
-  actor: Arc<Option<AnyActorWriterArc>>,
-  actor_reader: Arc<Option<AnyActorReaderArc>>,
+  actor_cell_writer: Arc<Option<AnyActorWriterArc>>,
+  actor_cell_reader: Arc<Option<AnyActorReaderArc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,8 +48,8 @@ impl Mailbox {
         throughput: 1,
         is_throughput_deadline_time_defined: Arc::new(AtomicBool::new(false)),
         throughput_deadline_time: Duration::from_millis(100),
-        actor: Arc::new(None),
-        actor_reader: Arc::new(None),
+        actor_cell_writer: Arc::new(None),
+        actor_cell_reader: Arc::new(None),
       })),
       message_queue,
       system_message_queue,
@@ -239,25 +239,7 @@ impl Mailbox {
     }
   }
 
-  pub(crate) async fn get_actor(&self) -> Arc<Option<AnyActorWriterArc>> {
-    let inner = self.inner.lock().await;
-    inner.actor.clone()
-  }
 
-  pub(crate) async fn get_actor_reader(&self) -> Arc<Option<AnyActorReaderArc>> {
-    let inner = self.inner.lock().await;
-    inner.actor_reader.clone()
-  }
-
-  pub(crate) async fn set_actor_writer(&mut self, actor: AnyActorWriterArc) {
-    let mut inner = self.inner.lock().await;
-    inner.actor = Arc::new(Some(actor));
-  }
-
-  pub(crate) async fn set_actor_reader(&mut self, actor_reader: AnyActorReaderArc) {
-    let mut inner = self.inner.lock().await;
-    inner.actor_reader = Arc::new(Some(actor_reader));
-  }
 
   pub(crate) async fn execute(&mut self) {
     if !self.is_closed().await {
@@ -271,7 +253,7 @@ impl Mailbox {
     if self.has_system_messages().await && !self.is_closed().await {
       match self.dequeue_system_message().await {
         Ok(Some(msg)) => {
-          let actor_opt_arc = self.get_actor_reader().await;
+          let actor_opt_arc = self.get_actor_cell_reader().await;
           if let Some(actor_arc) = actor_opt_arc.as_ref() {
             let mut actor_mg = actor_arc.lock().await;
             actor_mg.system_invoke(msg).await;
@@ -313,7 +295,7 @@ impl Mailbox {
             match msg {
               AutoReceivedMessage::Terminated { actor: child, .. } => {
                 log::debug!("Mailbox process message: {:?}", message);
-                let actor_arc = self.get_actor_reader_arc().await.unwrap();
+                let actor_arc = self.get_actor_cell_reader_arc_opt().await.unwrap();
                 let mut actor_mg = actor_arc.lock().await;
                 actor_mg.child_terminated(child).await;
               }
@@ -321,7 +303,7 @@ impl Mailbox {
             }
           } else {
             log::debug!("Mailbox process message: {:?}", message);
-            let actor_arc = self.get_actor_reader_arc().await.unwrap();
+            let actor_arc = self.get_actor_cell_reader_arc_opt().await.unwrap();
             let mut actor_mg = actor_arc.lock().await;
             actor_mg.invoke(message).await;
           }
@@ -356,26 +338,46 @@ impl Mailbox {
     self.system_message_queue.reader().clean_up().await;
   }
 
-  async fn get_actor_arc(&self) -> Option<AnyActorWriterArc> {
-    let actor_opt_arc = self.get_actor().await;
-    if let Some(actor_arc) = actor_opt_arc.as_ref() {
-      Some(actor_arc.clone())
+  pub(crate) async fn get_actor_cell_writer(&self) -> Arc<Option<AnyActorWriterArc>> {
+    let inner = self.inner.lock().await;
+    inner.actor_cell_writer.clone()
+  }
+
+  pub(crate) async fn get_actor_cell_reader(&self) -> Arc<Option<AnyActorReaderArc>> {
+    let inner = self.inner.lock().await;
+    inner.actor_cell_reader.clone()
+  }
+
+  pub(crate) async fn set_actor_cell_writer(&mut self, actor: AnyActorWriterArc) {
+    let mut inner = self.inner.lock().await;
+    inner.actor_cell_writer = Arc::new(Some(actor));
+  }
+
+  pub(crate) async fn set_actor_cell_reader(&mut self, actor_reader: AnyActorReaderArc) {
+    let mut inner = self.inner.lock().await;
+    inner.actor_cell_reader = Arc::new(Some(actor_reader));
+  }
+
+  async fn get_actor_cell_writer_arc_opt(&self) -> Option<AnyActorWriterArc> {
+    let actor_cell_writer_arc_opt = self.get_actor_cell_writer().await;
+    if let Some(actor_cell_writer_arc) = actor_cell_writer_arc_opt.as_ref() {
+      Some(actor_cell_writer_arc.clone())
     } else {
       None
     }
   }
 
-  async fn get_actor_reader_arc(&self) -> Option<AnyActorReaderArc> {
-    let actor_opt_arc = self.get_actor_reader().await;
-    if let Some(actor_arc) = actor_opt_arc.as_ref() {
-      Some(actor_arc.clone())
+  async fn get_actor_cell_reader_arc_opt(&self) -> Option<AnyActorReaderArc> {
+    let actor_cell_reader_arc_opt = self.get_actor_cell_reader().await;
+    if let Some(actor_cell_reader_arc) = actor_cell_reader_arc_opt.as_ref() {
+      Some(actor_cell_reader_arc.clone())
     } else {
       None
     }
   }
 
   async fn get_actor_path(&self) -> Option<String> {
-    match self.get_actor_arc().await {
+    match self.get_actor_cell_writer_arc_opt().await {
       Some(actor_arc) => Some(actor_arc.lock().await.path().await.to_string()),
       None => None,
     }
