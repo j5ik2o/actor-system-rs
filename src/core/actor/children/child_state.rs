@@ -1,4 +1,4 @@
-use crate::core::actor::child_restart_stats::ChildRestartStats;
+use crate::core::actor::children::child_restart_stats::ChildRestartStats;
 
 #[derive(Debug, Clone)]
 pub enum ChildState {

@@ -1,6 +1,6 @@
 use crate::core::actor::actor_ref::InternalActorRef;
-use crate::core::actor::child_restart_stats::ChildRestartStats;
-use crate::core::actor::child_state::ChildState;
+use crate::core::actor::children::child_restart_stats::ChildRestartStats;
+use crate::core::actor::children::child_state::ChildState;
 
 #[async_trait::async_trait]
 pub trait ChildrenContainer {
