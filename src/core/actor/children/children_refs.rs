@@ -409,8 +409,20 @@ impl ChildrenRefs {
     Self::Terminated
   }
 
-  pub fn clear(&mut self) {
-    *self = Self::Empty;
+  pub fn set_empty(&mut self) {
+    *self = Self::empty();
+  }
+
+  pub fn set_normal(&mut self) {
+    *self = Self::normal();
+  }
+
+  pub fn set_terminating(&mut self) {
+    *self = Self::terminating();
+  }
+
+  pub fn set_terminated(&mut self) {
+    *self = Self::terminated();
   }
 
   pub async fn is_empty(&self) -> bool {

@@ -1,9 +1,16 @@
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use crate::core::actor::Actor;
 
 pub struct Props<A: Actor + Send + Sync> {
   pub(crate) creator: Arc<dyn Fn() -> A + Send + Sync>,
+}
+
+impl<A: Actor + Send + Sync> std::fmt::Debug for Props<A> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "Props")
+  }
 }
 
 impl<A: Actor + Send + Sync> Clone for Props<A> {

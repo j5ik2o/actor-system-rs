@@ -14,8 +14,11 @@ use crate::core::actor::children::child_restart_stats::ChildRestartStats;
 use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::children::children_refs::ChildrenRefs;
 use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
+use crate::core::actor::{
+  Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell,
+};
 use crate::core::dispatch::dispatcher::Dispatcher;
+use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
 
 #[derive(Clone)]
@@ -143,9 +146,26 @@ impl ActorContext {
     lock.children_refs.clone()
   }
 
+  pub async fn terminate_child_refs(&mut self) {
+    let mut lock = self.inner.lock().await;
+    lock.children_refs.set_terminated();
+  }
+
   pub async fn terminate_system(&self) {
     let actor_system = self.get_actor_system().await;
     actor_system.terminate().await;
+  }
+
+  pub async fn watch(&self, who: InternalActorRef) {
+    let inner_lock = self.inner.lock().await;
+    let self_ref = inner_lock.self_ref.clone();
+    who.sys_tell(SystemMessage::watch(who.clone(), self_ref)).await;
+  }
+
+  pub async fn unwatch(&self, who: InternalActorRef) {
+    let inner_lock = self.inner.lock().await;
+    let self_ref = inner_lock.self_ref.clone();
+    who.sys_tell(SystemMessage::unwatch(who.clone(), self_ref)).await;
   }
 
   pub async fn self_path(&self) -> ActorPath {
@@ -181,11 +201,10 @@ impl ActorContext {
 
   pub async fn actor_of_with_name<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> TypedActorRef<B::M> {
     let name = Self::check_name(Some(name));
-    let child_actor = props.create();
     let terminate_notify = Arc::new(Notify::new());
     let mut mailbox = Mailbox::new().await;
     let child_actor_cell_writer = ActorCellWriter::new(mailbox.clone(), terminate_notify.clone());
-    let child_actor_cell_reader = ActorCellReader::new(child_actor, mailbox.clone(), terminate_notify);
+    let child_actor_cell_reader = ActorCellReader::new(props, mailbox.clone(), terminate_notify);
     let child_actor_writer_arc = Arc::new(Mutex::new(Box::new(child_actor_cell_writer) as Box<dyn AnyActorWriter>));
     let child_actor_reader_arc = Arc::new(Mutex::new(Box::new(child_actor_cell_reader) as Box<dyn AnyActorReader>));
     mailbox.set_actor_cell_writer(child_actor_writer_arc.clone()).await;

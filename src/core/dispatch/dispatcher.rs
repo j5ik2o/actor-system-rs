@@ -34,6 +34,20 @@ impl Dispatcher {
     mailbox.clean_up().await;
   }
 
+  pub(crate) async fn suspend<A: Actor + 'static>(&self, actor_cell_reader: &mut ActorCellReader<A>) {
+    let mailbox = actor_cell_reader.mailbox_mut();
+    if mailbox.suspend().await {
+      self.run().await;
+    }
+  }
+
+  pub(crate) async fn resume<A: Actor + 'static>(&self, actor_cell_reader: &mut ActorCellReader<A>) {
+    let mailbox = actor_cell_reader.mailbox_mut();
+    if mailbox.resume().await {
+      self.run().await;
+    }
+  }
+
   pub async fn register(&self, mailbox: Mailbox) {
     let mut mailboxes = self.mailboxes.lock().await;
     mailboxes.push(mailbox);

@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
-use crate::core::actor::{ActorError, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
+use crate::core::actor::{ActorError, AnyActorRef, AnyActorWriter, AnyActorWriterArc, SysTell};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -88,5 +88,19 @@ impl AnyActorWriter for ActorCellWriter {
 
   async fn get_terminate_notify(&self) -> Arc<Notify> {
     self.terminate_notify.clone()
+  }
+
+  async fn watch(&self, watchee: InternalActorRef) {
+    let actor_context = self.get_actor_context().await;
+    let self_ref = actor_context.internal_self_ref().await;
+    watchee.sys_tell(SystemMessage::watch(watchee.clone(), self_ref)).await;
+  }
+
+  async fn unwatch(&self, watchee: InternalActorRef) {
+    let actor_context = self.get_actor_context().await;
+    let self_ref = actor_context.internal_self_ref().await;
+    watchee
+      .sys_tell(SystemMessage::unwatch(watchee.clone(), self_ref))
+      .await;
   }
 }

@@ -20,7 +20,6 @@ pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
 mod children;
-mod death_watch;
 pub mod props;
 pub mod supervisor_strategy;
 mod typed_actor_context;
@@ -93,6 +92,9 @@ pub trait AnyActorWriter: Debug + Send + Sync {
   async fn stop(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn suspend(&self) -> Result<(), QueueError<SystemMessage>>;
   async fn resume(&self, cause: Arc<ActorError>) -> Result<(), QueueError<SystemMessage>>;
+
+  async fn watch(&self, watchee: InternalActorRef);
+  async fn unwatch(&self, watchee: InternalActorRef);
 
   async fn get_terminate_notify(&self) -> Arc<Notify>;
 }
