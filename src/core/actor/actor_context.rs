@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Weak};
 use base64_string_rs::Base64StringFactory;
 use rand::RngCore;
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
 
 use tokio::sync::{Mutex, Notify};
 
@@ -10,11 +10,11 @@ use crate::core::actor::actor_cell::actor_cell_writer::ActorCellWriter;
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorRef};
 use crate::core::actor::actor_system::{ActorSystem, ActorSystemRef};
-use crate::core::actor::props::Props;
-use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::actor::children::child_restart_stats::ChildRestartStats;
 use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::children::children_refs::ChildrenRefs;
+use crate::core::actor::props::Props;
+use crate::core::actor::{Actor, AnyActorReader, AnyActorReaderArc, AnyActorRef, AnyActorWriter, AnyActorWriterArc};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
 
@@ -199,11 +199,7 @@ impl ActorContext {
     child_actor_ref.set_actor_cell_writer(child_actor_writer_arc.clone());
     let internal_child_ref = child_actor_ref.to_untyped();
     let dispatcher = self.get_dispatcher().await;
-    let child_context = ActorContext::new(
-      Some(parent_context_ref.clone()),
-      internal_child_ref.clone(),
-      dispatcher,
-    );
+    let child_context = ActorContext::new(Some(parent_context_ref.clone()), internal_child_ref.clone(), dispatcher);
     let actor_system_ref = self.get_actor_system_ref().await;
     child_context.set_actor_system_ref(actor_system_ref.clone()).await;
 
@@ -219,7 +215,10 @@ impl ActorContext {
         children_readers_mg.insert(child_actor_path.clone(), child_actor_reader_arc.clone());
       }
       {
-        inner_lock.children_refs = inner_lock.children_refs.add(ChildRestartStats::new(internal_child_ref)).await;
+        inner_lock.children_refs = inner_lock
+          .children_refs
+          .add(ChildRestartStats::new(internal_child_ref))
+          .await;
         let mut child_contexts_mg = inner_lock.child_contexts.lock().await;
         child_contexts_mg.insert(child_actor_path.clone(), child_context.clone());
       }

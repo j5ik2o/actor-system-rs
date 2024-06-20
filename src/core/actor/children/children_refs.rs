@@ -9,8 +9,8 @@ use crate::core::actor::actor_path::{ActorPath, ActorPathBehavior};
 use crate::core::actor::actor_ref::InternalActorRef;
 use crate::core::actor::children::child_restart_stats::ChildRestartStats;
 use crate::core::actor::children::child_state::ChildState;
-use crate::core::actor::AnyActorRef;
 use crate::core::actor::children::children_container::ChildrenContainer;
+use crate::core::actor::AnyActorRef;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SuspendReason {
@@ -433,5 +433,4 @@ impl ChildrenRefs {
   pub async fn non_empty(&self) -> bool {
     !self.is_empty().await
   }
-
 }

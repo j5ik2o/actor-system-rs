@@ -7,7 +7,7 @@ use tokio::sync::{Mutex, Notify};
 use crate::core::actor::actor_context::{ActorContext, ActorContextRef};
 use crate::core::actor::actor_path::ActorPath;
 use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef};
-use crate::core::actor::supervisor_strategy::{OneForOneStrategy, RESTART_DECIDER, SupervisorStrategy};
+use crate::core::actor::supervisor_strategy::{OneForOneStrategy, SupervisorStrategy, RESTART_DECIDER};
 use crate::core::dispatch::any_message::AnyMessage;
 use crate::core::dispatch::mailbox::system_message::SystemMessage;
 use crate::core::dispatch::message::Message;
@@ -19,11 +19,11 @@ pub mod actor_path;
 pub mod actor_ref;
 pub mod actor_system;
 pub mod address;
+mod children;
 mod death_watch;
 pub mod props;
 pub mod supervisor_strategy;
 mod typed_actor_context;
-mod children;
 
 pub type ActorError = Box<dyn Error + Send + Sync + 'static>;
 
