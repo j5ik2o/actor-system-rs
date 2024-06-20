@@ -115,7 +115,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
     self.suspend_children().await;
 
     let mut parent_ref_opt = match self.get_parent().await {
-      Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
+      Some(parent_ref) => Some(parent_ref),
       _ => None,
     };
     if let Some(parent_ref) = &mut parent_ref_opt {
@@ -248,7 +248,7 @@ impl<A: Actor + 'static> ActorCellReader<A> {
       }
     } else {
       let parent_ref_opt = match self.get_parent().await {
-        Some(parent_ref) if parent_ref.path().is_child() => Some(parent_ref),
+        Some(parent_ref) => Some(parent_ref),
         _ => None,
       };
       if let Some(parent_ref) = &parent_ref_opt {
@@ -283,9 +283,15 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   }
 
   async fn get_parent(&self) -> Option<InternalActorRef> {
-    let result = self.get_actor_context().await.get_parent_context().await;
-    match result {
-      Some(parent_context) => Some(parent_context.internal_self_ref().await.clone()),
+    match self.get_actor_context().await.get_parent_context().await {
+      Some(parent_context) => {
+        let parent_ref = parent_context.internal_self_ref().await;
+        if parent_ref.path().is_child() {
+          Some(parent_ref)
+        } else {
+          None
+        }
+      }
       None => None,
     }
   }
@@ -316,7 +322,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
   async fn system_invoke(&mut self, mut system_message: SystemMessage) {
     log::debug!("system_invoke: {:?}", system_message);
     match system_message {
-      SystemMessage::Create { failure } => self.handle_create(failure.clone()).await,
+      SystemMessage::Create { failure } => self.handle_create(failure).await,
       SystemMessage::Recreate { cause } => self.handle_recreate(cause).await,
       SystemMessage::Suspend => self.handle_suspend().await,
       SystemMessage::Resume {
