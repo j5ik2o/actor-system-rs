@@ -465,7 +465,10 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
     match self.get_actor_context().await.get_parent_context().await {
       Some(parent_context) => {
         let parent_ref = parent_context.internal_self_ref().await;
-        if parent_ref.path().is_child() {
+        log::debug!("get_parent.path(): {}", parent_ref.path());
+        log::debug!("get_parent.path().name(): {}", parent_ref.path().name());
+        log::debug!("get_parent.path().is_child(): {}", parent_ref.path().is_child());
+        if parent_ref.path().is_child() && parent_ref.path().name() != "/" {
           Some(parent_ref)
         } else {
           None
