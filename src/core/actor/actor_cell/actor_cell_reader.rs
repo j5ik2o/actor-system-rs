@@ -468,7 +468,7 @@ impl<A: Actor + 'static> AnyActorReader for ActorCellReader<A> {
         log::debug!("get_parent.path(): {}", parent_ref.path());
         log::debug!("get_parent.path().name(): {}", parent_ref.path().name());
         log::debug!("get_parent.path().is_child(): {}", parent_ref.path().is_child());
-        if parent_ref.path().is_child() && parent_ref.path().name() != "/" {
+        if parent_ref.path().is_child() && parent_ref.path().name() != "user" {
           Some(parent_ref)
         } else {
           None

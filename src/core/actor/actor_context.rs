@@ -199,12 +199,16 @@ impl ActorContext {
     inner_lock.dispatcher.clone()
   }
 
-  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>) -> TypedActorRef<B::M> {
+  pub async fn actor_of<B: Actor + 'static>(&self, props: Props<B>) -> (ActorContext, TypedActorRef<B::M>) {
     let name = Self::random_name();
     self.actor_of_with_name(props, &name).await
   }
 
-  pub async fn actor_of_with_name<B: Actor + 'static>(&self, props: Props<B>, name: &str) -> TypedActorRef<B::M> {
+  pub async fn actor_of_with_name<B: Actor + 'static>(
+    &self,
+    props: Props<B>,
+    name: &str,
+  ) -> (ActorContext, TypedActorRef<B::M>) {
     let name = Self::check_name(Some(name));
     let terminate_notify = Arc::new(Notify::new());
     let mut mailbox = Mailbox::new().await;
@@ -260,7 +264,7 @@ impl ActorContext {
     }
 
     self.register(mailbox).await;
-    child_actor_ref
+    (child_context, child_actor_ref)
   }
 
   pub(crate) async fn register(&self, mailbox: Mailbox) {

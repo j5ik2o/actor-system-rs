@@ -23,6 +23,7 @@ mod children;
 pub mod props;
 pub mod supervisor_strategy;
 mod typed_actor_context;
+mod user_actor;
 
 pub type ActorError = Box<dyn Error + Send + Sync + 'static>;
 

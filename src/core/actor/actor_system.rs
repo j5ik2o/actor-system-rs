@@ -8,6 +8,7 @@ use crate::core::actor::actor_ref::{InternalActorRef, LocalActorRef, TypedActorR
 use crate::core::actor::address::Address;
 use crate::core::actor::children::children_container::ChildrenContainer;
 use crate::core::actor::props::Props;
+use crate::core::actor::user_actor::UserActor;
 use crate::core::actor::{Actor, SysTell};
 use crate::core::dispatch::dispatcher::Dispatcher;
 use crate::core::dispatch::mailbox::Mailbox;
@@ -16,6 +17,7 @@ use crate::core::dispatch::mailbox::Mailbox;
 struct ActorSystemInner {
   actor_context: ActorContext,
   dispatcher: Dispatcher,
+  user_actor_context: Option<ActorContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,10 +51,12 @@ impl ActorSystem {
     let actor_path = ActorPath::of_root(address);
     let mut actor_ref = LocalActorRef::new(actor_path);
 
+    let actor_context = ActorContext::new(None, InternalActorRef::Local(actor_ref.clone()), dispatcher.clone());
     let myself = Self {
       inner: Arc::new(Mutex::new(ActorSystemInner {
-        actor_context: ActorContext::new(None, InternalActorRef::Local(actor_ref.clone()), dispatcher.clone()),
+        actor_context,
         dispatcher,
+        user_actor_context: None,
       })),
       termination_notify: Arc::new(Notify::new()),
     };
@@ -73,6 +77,11 @@ impl ActorSystem {
     inner_lock.actor_context.clone()
   }
 
+  pub(crate) async fn get_user_actor_context(&self) -> ActorContext {
+    let inner_lock = self.inner.lock().await;
+    inner_lock.user_actor_context.as_ref().unwrap().clone()
+  }
+
   pub fn actor_system_ref(&self) -> ActorSystemRef {
     ActorSystemRef {
       inner: Arc::downgrade(&self.inner),
@@ -80,18 +89,33 @@ impl ActorSystem {
     }
   }
 
+  pub async fn init(&mut self) {
+    let mut inner_lock = self.inner.lock().await;
+    let props = Props::new(|| UserActor);
+    let name = "user";
+    let (ctx, _) = inner_lock.actor_context.actor_of_with_name(props, name).await;
+    inner_lock.user_actor_context = Some(ctx)
+  }
+
   pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>) -> TypedActorRef<A::M> {
     let inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.actor_of(props).await
+    let (_, actor_ref) = inner_lock.user_actor_context.as_ref().unwrap().actor_of(props).await;
+    actor_ref
   }
 
   pub async fn actor_of_with_name<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> TypedActorRef<A::M> {
     let inner_lock = self.inner.lock().await;
-    inner_lock.actor_context.actor_of_with_name(props, name).await
+    let (_, actor_ref) = inner_lock
+      .user_actor_context
+      .as_ref()
+      .unwrap()
+      .actor_of_with_name(props, name)
+      .await;
+    actor_ref
   }
 
   pub async fn when_terminated(&self) {
-    let actor_context = self.get_actor_context().await;
+    let actor_context = self.get_user_actor_context().await;
     let child_refs = actor_context.get_children_refs().await;
     for child_ref in child_refs.children().await {
       child_ref.when_terminated().await
@@ -99,7 +123,7 @@ impl ActorSystem {
   }
 
   pub async fn terminate(&self) {
-    let actor_context = self.get_actor_context().await;
+    let actor_context = self.get_user_actor_context().await;
     let child_refs = actor_context.get_children_refs().await;
     for mut child_ref in child_refs.children().await {
       child_ref.stop().await
