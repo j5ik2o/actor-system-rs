@@ -98,17 +98,14 @@ impl ActorSystem {
   }
 
   pub async fn actor_of<A: Actor + 'static>(&mut self, props: Props<A>) -> TypedActorRef<A::M> {
-    let inner_lock = self.inner.lock().await;
-    let (_, actor_ref) = inner_lock.user_actor_context.as_ref().unwrap().actor_of(props).await;
+    let (_, actor_ref) = self.get_user_actor_context().await.actor_of(props).await;
     actor_ref
   }
 
   pub async fn actor_of_with_name<A: Actor + 'static>(&mut self, props: Props<A>, name: &str) -> TypedActorRef<A::M> {
-    let inner_lock = self.inner.lock().await;
-    let (_, actor_ref) = inner_lock
-      .user_actor_context
-      .as_ref()
-      .unwrap()
+    let (_, actor_ref) = self
+      .get_user_actor_context()
+      .await
       .actor_of_with_name(props, name)
       .await;
     actor_ref
