@@ -251,6 +251,10 @@ impl<M: Message> TypedActorRef<M> {
     }
   }
 
+  pub(crate) async fn get_actor_context(&self) -> ActorContext {
+    self.inner.get_actor_context().await
+  }
+
   pub fn set_actor_cell_writer(&mut self, cell_writer: AnyActorWriterArc) {
     self.inner.actor_cell_writer = Some(cell_writer);
   }
