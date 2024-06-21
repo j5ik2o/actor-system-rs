@@ -141,12 +141,17 @@ impl ActorContext {
     lock.children_refs = lock.children_refs.remove(child).await;
   }
 
-  pub async fn get_child_refs(&self) -> ChildrenRefs {
+  pub async fn get_children_refs(&self) -> ChildrenRefs {
     let lock = self.inner.lock().await;
     lock.children_refs.clone()
   }
 
-  pub async fn terminate_child_refs(&mut self) {
+  pub async fn set_children_refs(&mut self, children_refs: ChildrenRefs) {
+    let mut lock = self.inner.lock().await;
+    lock.children_refs = children_refs;
+  }
+
+  pub async fn terminate_children_refs(&mut self) {
     let mut lock = self.inner.lock().await;
     lock.children_refs.set_terminated();
   }

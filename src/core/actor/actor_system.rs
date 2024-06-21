@@ -92,7 +92,7 @@ impl ActorSystem {
 
   pub async fn when_terminated(&self) {
     let actor_context = self.get_actor_context().await;
-    let child_refs = actor_context.get_child_refs().await;
+    let child_refs = actor_context.get_children_refs().await;
     for child_ref in child_refs.children().await {
       child_ref.when_terminated().await
     }
@@ -100,7 +100,7 @@ impl ActorSystem {
 
   pub async fn terminate(&self) {
     let actor_context = self.get_actor_context().await;
-    let child_refs = actor_context.get_child_refs().await;
+    let child_refs = actor_context.get_children_refs().await;
     for mut child_ref in child_refs.children().await {
       child_ref.stop().await
     }

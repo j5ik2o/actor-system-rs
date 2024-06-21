@@ -8,12 +8,26 @@ use crate::core::actor::actor_ref::InternalActorRef;
 use crate::core::actor::children::child_restart_stats::ChildRestartStats;
 use crate::core::actor::children::child_state::ChildState;
 use crate::core::actor::children::children_container::ChildrenContainer;
-use crate::core::actor::AnyActorRef;
+use crate::core::actor::{ActorError, AnyActorRef};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum SuspendReason {
   UserRequest,
   Termination,
+  Creation,
+  Recreation { cause: Arc<ActorError> },
+}
+
+impl PartialEq for SuspendReason {
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::UserRequest, Self::UserRequest) => true,
+      (Self::Termination, Self::Termination) => true,
+      (Self::Creation, Self::Creation) => true,
+      (Self::Recreation { cause: l }, Self::Recreation { cause: r }) => Arc::ptr_eq(l, r),
+      _ => false,
+    }
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -381,6 +395,45 @@ impl ChildrenContainer for ChildrenRefs {
 }
 
 impl ChildrenRefs {
+  pub async fn deep_copy(&self) -> Self {
+    match self {
+      Self::Empty => Self::Empty,
+      Self::Normal { inner } => {
+        let inner = inner.lock().await;
+        Self::Normal {
+          inner: Arc::new(Mutex::new(ChildrenRefsNormalInner {
+            children: inner.children.clone(),
+            reserved_names: inner.reserved_names.clone(),
+          })),
+        }
+      }
+      Self::Terminating { inner } => {
+        let inner = inner.lock().await;
+        Self::Terminating {
+          inner: Arc::new(Mutex::new(ChildrenRefsTerminatingInner {
+            children: inner.children.clone(),
+            reserved_names: inner.reserved_names.clone(),
+            to_die: inner.to_die.clone(),
+            reason: inner.reason.clone(),
+          })),
+        }
+      }
+      Self::Terminated => Self::Terminated,
+    }
+  }
+
+  pub async fn set_suspend_reason(&mut self, reason: SuspendReason) {
+    match self {
+      Self::Empty => {}
+      Self::Normal { inner } => {}
+      Self::Terminating { inner } => {
+        let mut inner = inner.lock().await;
+        inner.reason = reason;
+      }
+      Self::Terminated => {}
+    }
+  }
+
   pub fn empty() -> Self {
     Self::Empty
   }
